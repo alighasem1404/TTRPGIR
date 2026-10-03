@@ -1,0 +1,25 @@
+{
+  "format": "ttrpg-book-conversion",
+  "version": 1,
+  "rules": {
+    "entryHeadingLevel": 2,
+    "pageBreaks": "ignore",
+    "images": {
+      "defaultPlacement": "inline",
+      "ignorePositioning": true,
+      "ignoredAlt": ["background", "menu", "nameBanner"],
+      "ignoredSourcePatterns": ["background", "transparent"]
+    }
+  },
+  "overrides": [
+    {
+      "type": "image",
+      "match": { "alt": "emblem" },
+      "action": "move",
+      "location": "entry-top-right",
+      "className": "entry-emblem",
+      "width": "150px",
+      "annotation": "Place the emblem beside the entry title in the web reader."
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Book Maker · Euphoria Content Lab</title>
+    <meta name="description" content="Private Markdown to JSON book preparation tool." />
+    <link rel="stylesheet" href="styles.css?v=11" />
+  </head>
+  <body>
+    <div class="app-shell maker-page">
+      <header class="topbar">
+        <div class="brand-mark" aria-label="Euphoria Content Lab">
+          <span class="brand-glyph">✦</span>
+          <span><strong>EUPHORIA</strong><small>CONTENT LAB</small></span>
+        </div>
+        <div class="topbar-center">
+          <span class="eyebrow">PRIVATE BOOK MAKER</span>
+          <span class="source-status" id="sourceStatus"><i></i> Loading demo…</span>
+        </div>
+        <a class="file-loader" href="index.html">Open reader</a>
+        <label class="file-loader" for="mdInput">Import Markdown</label>
+        <button id="exportButton" class="export-button" type="button" disabled>Export JSON</button>
+        <input id="mdInput" type="file" accept=".txt,.md,text/plain,text/markdown" />
+        <input id="jsonInput" type="file" accept=".json,application/json" hidden />
+      </header>
+
+      <main class="workspace maker-workspace">
+        <aside class="sidebar maker-sidebar">
+          <div class="book-card">
+            <div class="book-card-art"><span>✦</span><span>BOOK<br />MAKER</span></div>
+            <div class="book-card-copy">
+              <span class="eyebrow">PREPARATION MODE</span>
+              <h1 id="bookTitle">Euphoria Demo</h1>
+              <p id="bookDescription">Import Markdown, prepare the package, and export JSON.</p>
+              <div class="book-meta"><span id="pageCount">— entries</span><span id="themeLabel">JSON v1</span></div>
+            </div>
+          </div>
+
+          <div class="maker-panel">
+            <span class="eyebrow">WORKFLOW</span>
+            <h2>Prepare this book</h2>
+            <p>Source decisions stay here. The published reader only receives the finished package.</p>
+            <div class="maker-steps">
+              <div class="maker-step active"><b>01</b><span>Import Markdown</span></div>
+              <div class="maker-step active"><b>02</b><span>Build JSON package</span></div>
+              <div class="maker-step"><b>03</b><span>Export to reader</span></div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="section-heading"><span>Entries</span><span class="section-count" id="contentsCount">—</span></div>
+            <label class="search-box">
+              <span>⌕</span>
+              <input id="searchInput" type="search" placeholder="Search entries" autocomplete="off" />
+            </label>
+            <nav id="contents" class="contents" aria-label="Book entries"></nav>
+          </div>
+
+          <div class="sidebar-footer"><span class="status-dot"></span><span>Private preparation tool</span></div>
+        </aside>
+
+        <section class="reader-area">
+          <div class="reader-toolbar">
+            <div><span class="eyebrow">PACKAGE PREVIEW</span><strong id="currentLabel">Welcome</strong></div>
+            <div class="page-controls">
+              <button id="previousButton" class="icon-button" type="button" aria-label="Previous content entry">←</button>
+              <span><b id="currentPage">1</b><em>/</em><span id="totalPages">—</span></span>
+              <button id="nextButton" class="icon-button" type="button" aria-label="Next content entry">→</button>
+            </div>
+          </div>
+          <div class="reader-stage"><div id="pageViewport" class="page-viewport" aria-live="polite"></div></div>
+          <div class="reader-footer"><span id="pageHint">This is the package preview. Export when the structure is ready.</span><button id="sourceToggle" class="text-button" type="button">Show JSON entry</button></div>
+          <pre id="sourceSlice" class="source-slice" hidden></pre>
+        </section>
+
+        <aside class="inspector maker-inspector">
+          <div class="inspector-heading"><span class="eyebrow">BUILD SUMMARY</span><span class="live-badge">PRIVATE</span></div>
+          <h2>Canonical package</h2>
+          <p class="inspector-intro">The preview is rendered from the same JSON structure that will be sent to the reader.</p>
+          <div class="theme-panel">
+            <div class="section-heading theme-heading"><span>BOOK THEME</span><span id="cssTokenCount">—</span></div>
+            <label class="theme-field" for="themePreset">Palette</label>
+            <select id="themePreset" class="theme-select">
+              <option value="source">Source CSS palette</option>
+              <option value="classic">Euphoria classic</option>
+              <option value="midnight">Midnight archive</option>
+              <option value="ember">Ember parchment</option>
+              <option value="custom">Custom palette</option>
+            </select>
+            <div id="themeSwatches" class="theme-swatches" aria-label="Current theme colors"></div>
+            <p id="themeNote" class="theme-note">Reads safe color variables from the Markdown header.</p>
+            <div class="palette-color-heading">Set palette colors</div>
+            <div id="paletteColorControls" class="palette-color-controls" aria-label="Set book palette colors"></div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card"><b id="statPages">—</b><span>entries</span></div>
+            <div class="stat-card"><b id="statImages">—</b><span>assets</span></div>
+            <div class="stat-card"><b id="statTables">—</b><span>tables</span></div>
+            <div class="stat-card"><b id="statDirectives">—</b><span>blocks</span></div>
+          </div>
+          <div class="support-card"><span class="support-icon">✓</span><div><strong>Ready to export</strong><p>JSON includes content, assets, conversion details, and the palette that colors every image frame.</p></div></div>
+          <div class="support-card muted-card"><span class="support-icon">→</span><div><strong>Next step</strong><p>Open the exported package in index.html to test the independent reader.</p></div></div>
+        </aside>
+      </main>
+      <div id="notice" class="notice" role="status" hidden></div>
+    </div>
+    <script src="image-viewer.js?v=1"></script>
+    <script src="app.js?v=10"></script>
+  </body>
+</html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Euphoria Demo · Content Reader</title>
+    <meta name="description" content="A JSON-powered digital TTRPG book reader." />
+    <link rel="stylesheet" href="styles.css?v=11" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-mark" aria-label="Euphoria Content Lab">
+          <span class="brand-glyph">✦</span>
+          <span><strong>EUPHORIA</strong><small>CONTENT LAB</small></span>
+        </div>
+        <div class="topbar-center">
+          <span class="eyebrow">BOOK READER</span>
+          <span class="source-status" id="sourceStatus"><i></i> Loading demo…</span>
+        </div>
+        <label class="file-loader" for="jsonInput">Open book JSON</label>
+        <input id="jsonInput" type="file" accept=".json,application/json" />
+      </header>
+
+      <main class="workspace">
+        <aside class="sidebar">
+          <div class="book-card">
+            <div class="book-card-art"><span>✦</span><span>ORDER<br />OF<br />EUPHORIA</span></div>
+            <div class="book-card-copy">
+              <span class="eyebrow">DEMO EDITION</span>
+              <h1 id="bookTitle">Euphoria Demo</h1>
+              <p id="bookDescription">A Homebrewery Markdown reading test.</p>
+              <div class="book-meta"><span id="pageCount">— entries</span><span id="themeLabel">5ePHB</span></div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="section-heading"><span>Book structure</span><span class="section-count" id="contentsCount">—</span></div>
+            <label class="search-box">
+              <span>⌕</span>
+              <input id="searchInput" type="search" placeholder="Search this book" autocomplete="off" />
+            </label>
+            <nav id="contents" class="contents" aria-label="Book contents"></nav>
+          </div>
+
+          <div class="sidebar-footer">
+            <span class="status-dot"></span>
+            <span>JSON package · reader mode</span>
+          </div>
+        </aside>
+
+        <section class="reader-area">
+          <div class="reader-toolbar">
+            <div>
+              <span class="eyebrow">CONTENT ENTRY</span>
+              <strong id="currentLabel">Cover</strong>
+            </div>
+            <div class="page-controls">
+              <button id="previousButton" class="icon-button" type="button" aria-label="Previous content entry">←</button>
+              <span><b id="currentPage">1</b><em>/</em><span id="totalPages">—</span></span>
+              <button id="nextButton" class="icon-button" type="button" aria-label="Next content entry">→</button>
+            </div>
+          </div>
+
+          <div class="reader-stage">
+            <div id="pageViewport" class="page-viewport" aria-live="polite"></div>
+          </div>
+
+          <div class="reader-footer">
+            <span id="pageHint">Navigate through the entries in this book package.</span>
+          </div>
+        </section>
+
+        <aside class="inspector">
+          <div class="inspector-heading">
+            <span class="eyebrow">BOOK PACKAGE</span>
+            <span class="live-badge">READY</span>
+          </div>
+          <h2>Reader-ready content</h2>
+          <p class="inspector-intro">This reader consumes the standardized JSON package produced by Book Maker.</p>
+          <div class="stat-grid">
+            <div class="stat-card"><b id="statPages">—</b><span>entries</span></div>
+            <div class="stat-card"><b id="statImages">—</b><span>assets</span></div>
+            <div class="stat-card"><b id="statTables">—</b><span>tables</span></div>
+            <div class="stat-card"><b id="statDirectives">—</b><span>content blocks</span></div>
+          </div>
+          <div class="support-card">
+            <span class="support-icon">⌘</span>
+            <div><strong>Package contract</strong><p>Entries, content blocks, assets, and theme tokens are delivered as one versioned book package.</p></div>
+          </div>
+          <div class="support-card muted-card">
+            <span class="support-icon">＋</span>
+            <div><strong>Reader boundary</strong><p>Markdown conversion and style decisions happen in Book Maker, outside this reader.</p></div>
+          </div>
+        </aside>
+      </main>
+
+      <div id="notice" class="notice" role="status" hidden></div>
+    </div>
+    <script src="image-viewer.js?v=1"></script>
+    <script src="reader.js?v=9"></script>
+  </body>
+</html>

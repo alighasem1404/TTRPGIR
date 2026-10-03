@@ -1,0 +1,1760 @@
+```metadata
+title: Euphoria Demo
+description: ''
+tags: []
+renderer: V3
+theme: 5ePHB
+snippets:
+  - name: brew_snippets
+    subsnippets:
+      - name: example snippet
+        gen: >-
+
+          The text between `\snippet title` lines will become a snippet of name
+          `title` as this example provides.
+
+
+          This snippet is accessible in the brew tab, and will be inherited if
+          the brew is used as a theme.
+
+```
+
+```css
+/*=======---  Example CSS styling  ---=======*/
+/* Any CSS here will apply to your document! */
+
+:root {
+    /* Backgrounds */
+    --bg: #f5ead2;          /* parchment */
+    --bg-light: #fbf4e5;
+    --card: #efe0c0;
+
+    /* Gold */
+    --gold: #b68a3d;
+    --gold-light: #d9b86c;
+    --gold-dark: #7a5927;
+
+    /* Burgundy */
+    --wine: #6f2637;
+    --wine-dark: #4d1a25;
+
+    /* Purple Accent */
+    --plum: #5d466f;
+
+    /* Text */
+    --text: #4a3825;
+    --text-light: #7a6143;
+
+    /* Borders */
+    --border: #c8a463;
+
+    /* Hover */
+    --hover: #f8efd8;
+}
+
+
+.page {
+  background-image:url(https://github.com/fabfictionrpg/paging/blob/main/Euphoria/normal%20page.webp?raw=true);
+  background-size:101%;
+  background-position: center;
+  
+}
+
+.page:after{
+  background-image:url()
+}
+
+
+
+.clubName h2{
+  
+  font-size:45px;
+  font-family:'MrEavesRemake';
+  position:absolute;
+  left:0%;
+  top:59%;
+  text-align:center;
+  width:440px !important;
+ color:#522;
+  font-weight:600;
+}
+
+
+.clubStat{
+left:0%;
+  top:65%;
+  position:absolute;
+   width:440px !important;
+  text-align:center;
+}
+
+
+.dividerTitle{
+
+  position:absolute;
+  text-align:center;
+  color:#522;
+  top:15%;
+  left:0;
+  font-size:95px;
+  font-family:'MrEavesRemake';
+  font-weight:1200;
+  text-shadow: 2px 2px 4px #333;
+  letter-spacing: 5px;
+  -webkit-text-stroke: 0.01rem white;
+}
+
+
+/* image frame */
+.imgDecoration {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.imgDecoration img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* inner frame */
+.imgDecoration::before {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  border: 2px solid #9b7a35;
+  box-shadow: inset 0 0 0 1px #d8bd73;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* corner ornaments */
+.imgDecoration::after {
+  content: "✦ ✦\A\A\A\A\A\A\A\A\A\A\A\A✦ ✦";
+  white-space: pre;
+  position: absolute;
+  inset: 0.0%;
+  color: #522;
+  font-size: 28px;
+  line-height: 1.16;
+  letter-spacing: 133px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+
+.imgDecoration::after {
+    
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+
+    box-shadow:
+        inset 40px 40px 40px rgba(120,80,20,.18),
+        inset -40px 40px 40px rgba(120,80,20,.18),
+        inset 40px -40px 40px rgba(120,80,20,.18),
+        inset -40px -40px 40px rgba(120,80,20,.18);
+}
+
+.imgDecoration::after {
+   
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+
+    background:
+        radial-gradient(circle at top left, rgba(0,0,0,.52), transparent 20%),
+        radial-gradient(circle at top right, rgba(0,0,0,.52), transparent 20%),
+        radial-gradient(circle at bottom left, rgba(0,0,0,.52), transparent 20%),
+        radial-gradient(circle at bottom right, rgba(0,0,0,.52), transparent 20%);
+
+    box-shadow:
+        inset 0 0 60px rgba(0,0,0,.28),
+        inset 0 0 15px rgba(120,80,20,.68);
+}
+
+.artifact {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.artifact img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.artifact::after {
+  content: "✦ ✦\A\A\A\A\A\A\A\A\A✦ ✦";
+  white-space: pre;
+  position: absolute;
+  inset: 0.0%;
+  color: #522;
+  font-size: 28px;
+  line-height: 1.92;
+  letter-spacing: 242px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+
+.npc{
+position: relative;
+  display: inline-block;
+  overflow: hidden;
+  
+}
+
+.npc img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.npc::after {
+  content: "✦ ✦\A\A\A\A\A\A\A\A\A\A✦ ✦";
+  white-space: pre;
+  position: absolute;
+  inset: 0%;
+  color: #522;
+  font-size: 28px;
+  line-height: 2.61;
+  letter-spacing: 133px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+
+/* table */
+
+
+/* Fantasy Table */
+.fancyTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+
+    background: rgba(247, 238, 215, 0.85);
+
+    border: 2px solid #8b6a2d;
+    box-shadow:
+        inset 0 0 0 1px #d8bd73,
+        inset 0 0 20px rgba(120,80,20,.15);
+
+    color: #3a2815;
+    font-size: 0.95em;
+}
+
+.fancyTable th {
+    background: #522;
+    color: #f8f3e8;
+
+    padding: 8px 12px;
+    text-align: center;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    vertical-align:middle;
+
+    border-bottom: 2px solid #d8bd73;
+}
+
+.fancyTable td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(139,106,45,.35);
+    text-align: center;
+  vertical-align:middle;
+}
+
+.fancyTable tr:nth-child(even) td {
+    background: rgba(180,150,80,.08);
+}
+
+.fancyTable tr:nth-child(odd) td {
+    background: rgb(212, 171, 123);
+}
+
+
+
+.menuTable table tr th:first-child, 
+.menuTable table tr td:first-child {
+  width: 200px;
+  
+}
+
+.menuTable table tr th:nth-child(2), 
+.menuTable table tr td:nth-child(2) {
+  width: 100px;
+  
+}
+
+
+
+
+/* name banners */
+
+.ownerName{
+  color:white;
+  position:absolute;
+  top:51.5%;
+  left:6%;
+  font-family:ScalySansSmallCapsRemake;
+  
+}
+
+
+.barKeep{
+    color:white;
+  position:absolute;
+  top:47.5%;
+  left:59%;
+  font-family:ScalySansSmallCapsRemake;
+}
+
+
+
+
+
+
+
+.video-section {
+  margin-top: 12px;
+}
+
+.video-section h2 {
+  text-align: center;
+  color: #58180D;
+  margin-bottom: 10px;
+}
+
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.video-grid iframe {
+  width: 100%;
+
+  border: 3px solid #58180D;
+  border-radius: 8px;
+  background: #000;
+  box-shadow: 0 2px 6px #0006;
+}
+
+
+
+/* Playlist Grid */
+.playlist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+    padding: 24px;
+    background: linear-gradient(
+        -45deg,
+        #f7e9cf 0%,      /* light parchment */
+        #e8d3ad 25%,     /* warm beige */
+        #c9a56a 55%,     /* antique gold tint */
+        #7a3b3b 80%,     /* muted wine transition */
+        var(--wine) 100% /* deep burgundy */
+    );
+    border: 2px solid var(--gold);
+    border-radius: 16px;
+}
+
+
+
+
+.playlist h2,
+.playlist h3 {
+    color:white;
+  margin-top:-20px
+}
+
+.playlist a {
+    color: var(--plum);
+}
+.playlist img {
+    background: var(--wine);
+    color: var(--bg-light);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+  width:100%;
+}
+
+
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.video-grid a {
+  position: relative;
+  display: block;
+}
+
+.video-grid img {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+  border: 2px solid #b68a3d;
+}
+
+/* QR overlay */
+.video-grid .qr {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  border: 2px solid #b68a3d;
+  background: #f5ead2;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+
+
+.page code{
+  background-color:#522d;
+  color:white;
+  font-family:n;
+  line-height: 1.3;
+}
+
+
+
+
+
+```
+
+{{frontCover}}
+
+
+{{banner Demo}}
+
+
+
+
+![menu](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/Euphoria%20Cover.webp?raw=true){position:absolute,width:100%,left:0,top:0,height:100%}
+
+
+
+
+\page
+{{insideCover}}
+
+::::
+##### We are profoundly grateful—not just for your financial support, but for the trust and belief you've placed in our vision from the very beginning. This Demo file in your hands is the first tangible piece of the world we've been dreaming of, featuring 3 of the 25 unique Party Hubs that will fill the main book. It is exclusively for you, our backers, because without you, this project would still be just a whisper of an idea. We genuinely hope you enjoy flipping through these pages, and we invite you to be an integral part of this journey—please share your honest thoughts and feedback, as your voice truly shapes the final Order of Euphoria.
+
+
+
+
+{{imageMaskCenter11,--offsetX:0%,--offsetY:-7%,--rotation:0
+  ![The Spirit of War, 1851, by Jasper Francis Cropsey](https://cdn.midjourney.com/e76a268e-a236-4df4-a8ba-548094da2845/0_2.png){position:absolute,bottom:2%,right:130px,height:70%,width:70%}
+}}
+
+
+
+\page
+
+
+{{clubName
+## The Fang
+
+}}
+
+{{ownerName
+Lady Rhyssa Huntclaw
+}}
+
+{{clubStat
+##### Upper-Class{{width:25px}}True Neutral
+}}
+{{wide
+::::::::::::::::::::::::
+}}
+:::::::::::::::::::::::::::::
+The Fang is an exclusive social hunting ground where wealthy nobles, influential merchants, and ambitious socialites gather to pursue excitement beyond the boundaries of conventional society. Inspired by the predatory instincts of its beastfolk founders, the establishment transforms courtship, status, and social advancement into a sophisticated game of hunters and prey. Each evening, patrons seek new conquests, whether in the form of romance, companionship, admiration, or the thrill of pursuing those who have captured their interest.
+
+For the aristocracy, The Fang offers an escape from the boredom of privilege. For commoners and rising social climbers, it presents opportunities to gain wealth, connections, gifts, and patronage from the realm's elite. Within its luxurious halls, fortunes can change with a single conversation, and an ordinary guest may leave as the favored companion of a noble house. At The Fang, everyone is hunting for something—and everyone risks becoming someone else's prize.
+
+:
+### Origin
+
+The Fang was founded nearly three decades ago by Lady Rhyssa Huntclaw and several influential beastfolk noble houses who had grown dissatisfied with the rigid formalities of traditional aristocratic society. While nobles attended countless banquets, galas, and royal courts, Rhyssa observed that many secretly craved something more exciting than politics and etiquette. She envisioned a place where power, desire, ambition, and opportunity could collide beneath one roof. Pooling their wealth and influence, the founding houses transformed an abandoned noble manor into an exclusive social venue unlike any other in the kingdom.
+
+From its earliest days, The Fang embraced a philosophy inspired by the predatory instincts of its beastfolk founders: society itself was a hunt. Nobles sought entertainment, influence, and companionship, while ambitious commoners sought wealth, connections, and a chance to rise above their station. The club was carefully designed to bring these worlds together through games of seduction, reputation, and social competition. Over time, The Fang evolved into one of the most prestigious and controversial establishments in the realm, attracting nobles, spies, merchants, artists, and social climbers from every corner of the kingdom. Today, it remains a place where fortunes are made, reputations are destroyed, and every guest enters as either a hunter or potential prey.
+
+
+![hubOwner](https://cdn.midjourney.com/93394ff2-3701-45ee-80d7-691f321d9e7a/0_3.jpeg){position:absolute,top:35px,left:25px,width:390px}
+
+![emblem](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/The%20Fang.webp?raw=true){position:absolute,top:95px,right:92px,width:255px}
+![nameBanner](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/nameBanner.webp?raw=true){position:absolute,top:45%,width:250px,left:-10px,filter:grayscale(50%)hue-rotate(-20deg)saturate(0.8)contrast(0.85)}
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/page%201%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+
+
+{{pageNumber,auto}}
+
+
+\page
+
+{{wide
+
+}}
+### Specialty 
+
+The Fang is not merely a place of entertainment—it is a social hunting ground where attraction, status, desire, and ambition become the quarry. The establishment caters primarily to wealthy nobles, influential merchants, foreign dignitaries, celebrated artists, and other members of high society who seek excitement beyond the rigid expectations of aristocratic life. Within its halls, patrons pursue romance, companionship, admiration, influence, and social conquest with the same enthusiasm that hunters pursue game. Every conversation, dance, introduction, and lingering glance presents an opportunity to capture someone's attention or become the target of another's interest. The Fang exists to transform social interaction into sport, and its patrons willingly participate in the hunt.
+
+Located within one of the wealthiest districts of the city, The Fang occupies a lavish manor whose architecture immediately distinguishes it from neighboring estates. Black stone walls rise behind wrought-iron gates forged in the shape of interlocking fangs, while silver lanterns illuminate pathways lined with statues of hunting cats, wolves, and other predators. Crimson banners bearing the Huntclaw crest sway above the entrance as elegant carriages arrive throughout the evening carrying nobles, merchants, visiting dignitaries, and carefully selected guests from humbler backgrounds. The grounds are meticulously maintained, with decorative gardens, moonlit courtyards, and secluded terraces that provide countless opportunities for private encounters away from the crowds. Every element of the estate is designed to project both luxury and danger, reminding visitors that they have entered a place where every interaction carries purpose.
+
+Upon entering, guests discover an environment carefully crafted to encourage pursuit and temptation. Velvet lounges, secluded salons, private balconies, and hidden alcoves provide intimate settings for conversation, courtship, and negotiation. At the center of the manor stands a magnificent ballroom illuminated by crystal chandeliers shaped like silver claws. Musicians, dancers, performers, and entertainers move throughout the venue under the direction of Valerio Quicktail, ensuring that every evening feels unique. Rich wines flow from Garrick Redmane's polished black-marble bar, while Lady Rhyssa Huntclaw observes the festivities from her elevated balcony, watching the endless games unfold beneath her gaze.
+
+What truly separates The Fang from other noble establishments is its philosophy. The club openly embraces the belief that civilization has not replaced the hunt—it has merely refined it. Wealthy patrons seek beauty, entertainment, companionship, and the thrill of pursuit, while ambitious guests seek wealth, patronage, connections, and opportunities to improve their station. The hub deliberately brings these groups together, creating an environment where desires and ambitions collide. A noble may arrive searching for a captivating companion, while a commoner arrives hoping to attract the attention of a powerful benefactor. Both become participants in the same game.
+
+The atmosphere of The Fang constantly shifts between elegance and tension. Laughter echoes through crowded salons, musicians perform beneath glittering chandeliers, and guests exchange compliments over expensive drinks. Beneath this luxurious surface, however, every patron is evaluating those around them. Some seek romance, others seek status, and many simply seek the excitement that comes from the chase itself. Friendships, rivalries, courtships, and scandals are born nightly within its walls. A single conversation can lead to a lucrative opportunity, a powerful alliance, a life-changing romance, or a reputation-damaging embarrassment.
+
+For many nobles, The Fang represents freedom from the boredom of privilege. For ambitious commoners, it represents a rare chance to stand among society's elite and potentially change their fortunes forever. Some visitors leave with gifts, contracts, invitations, or influential patrons. Others leave with broken hearts, damaged reputations, or dangerous obsessions. Regardless of the outcome, every guest participates in the same grand tradition. 
+
+
+
+
+{{imgDecoration,
+![location-2](https://cdn.midjourney.com/c4ce9afa-d9b7-433e-a0b4-96ff87558956/0_3.jpeg)
+}}
+{{pageNumber,auto}}
+
+
+\page
+
+{{wide}}
+### Membership
+
+Membership requires sponsorship by two existing members and approval from Lady Rhyssa Huntclaw. Applicants are judged on discretion, ambition, charm, and social skill rather than wealth alone. Members gain access to exclusive lounges, private events, influence competitions, information markets, and the prestigious Ledger of Predators.
+:
+### Secret
+
+Kaela Ironfang never resigned from the royal security force. Her departure was staged after she uncovered nobles abusing their influence. Lady Rhyssa Huntclaw offered her something the crown would not: access. For years, Kaela has quietly used The Fang to continue tracking the same network from within high society itself. If that truth became public, every noble tied to the buried scandal would have reason to panic—and to silence her.
+:
+### Request
+
+Lady Rhyssa Huntclaw privately summons the party and offers a generous reward for a task she trusts to very few people. Her teenage son, Lucien Huntclaw, has become the target of a group of wealthy orc nobles who have twisted The Fang's philosophy into something dangerous. Viewing the young heir as the ultimate prize, they have organized an illegal hunt, competing among themselves to capture, embarrass, or manipulate him in order to gain prestige within their circle.
+
+Although Kaela Ironfang has increased security, Rhyssa fears that using the club's staff alone would attract unwanted attention and turn the situation into a public scandal. Instead, she asks the party to act as Lucien's discreet protectors for several nights while the Hunt takes place. They must keep him safe during social events, identify the individuals behind the conspiracy, and prevent the orcs from carrying out their plans without causing panic among the guests. Success will earn the party the gratitude of the Huntclaw family, access to The Fang's inner circles, and a substantial reward. Failure could place Lucien in the hands of powerful predators who see him not as a person, but as the most valuable trophy in the city.
+
+**Reward:** Lady Rhyssa grants 5,000 gold pieces, Huntclaw family favor, privileged access to The Fang's inner circles, exclusive invitations, and future patronage opportunities for proving discretion, loyalty, and skill.
+
+
+
+### Rumors
+#### *The Silver Fang's Forbidden Hunt*
+
+Some say that The Fang’s famous Hunt Night is not merely a social competition but a tradition built upon an ancient noble blood oath. Rumors claim that the original founders created a hidden version of the hunt where the prey is not chosen by the Living Map but by a secret council of elite members seeking to test the loyalty, ambition, or weaknesses of powerful figures. Those who survive the hidden hunt supposedly gain unimaginable influence within high society, while those who fail find their reputations mysteriously destroyed within weeks. Many dismiss the story as an exaggerated tale meant to enhance The Fang’s mystique—but several disgraced nobles insist they were once hunted themselves.
+
+#### *The Guest Who Never Leaves*
+
+Whispers spread among servants that one mysterious masked patron has attended The Fang every week for nearly twenty years without anyone ever discovering their identity. They never participate in competitions, never reveal their name, and always arrive before the first guest and leave after the final lantern burns out. Some believe they are an ancient noble preserving a forgotten identity, while others claim they are collecting secrets for a powerful organization. The strangest part is that every staff member seems to know exactly who the guest is—but whenever questioned, they all give the same answer: “Some hunters are safer when they remain unseen.”
+:
+
+### Event Table
+{{fancyTable
+|  d6 | Event       |
+| :-: | :-------------- |
+|  1  | **The Courtship Challenge.** Two influential patrons publicly compete for the affection of a guest. Spectators place reputation wagers on the outcome, and the party may be invited to participate or judge.                                      |
+|  2  | **A Dangerous Secret.** An anonymous patron offers valuable information to anyone willing to complete a discreet task before the night ends. Several rivals are already pursuing the same prize.                                                  |
+|  3  | **The Silver Toast.** A noble announces an extravagant celebration and offers lavish rewards to anyone who can provide the evening's most entertaining story, performance, or rumor.                                                              |
+|  4  | **Masks and Motives.** A surprise masquerade begins, requiring all guests to conceal their identities. Hidden alliances form as secrets become easier to share and harder to trace.                                                               |
+|  5  | **Predator's Duel.** A heated rivalry between two prominent members escalates into a formal contest of wit, charm, and influence. The party may be recruited as representatives, witnesses, or saboteurs.                                         |
+|  6  | **Hunt Night.** One guest possesses a valuable secret. Throughout the evening, patrons compete to uncover it through conversation, deduction, bribery, or manipulation. By dawn, the secret's owner may gain prestige—or become the night's prey. |
+
+}}
+
+
+{{pageNumber,auto}}
+
+\page
+
+
+{{wide
+
+}}
+
+### Services
+
+#### Private Lounges
+
+Members may reserve luxurious private chambers for confidential meetings, political negotiations, romantic encounters, or sensitive business discussions. Protected by strict privacy rules and monitored only for safety, these lounges provide a discreet environment where patrons can speak freely, form alliances, exchange secrets, and conduct affairs away from the watchful eyes of the ballroom.
+
+
+#### Information Brokerage
+
+Information is among the most valuable commodities within The Fang. Members may discreetly buy, sell, verify, or exchange rumors, intelligence, secrets, and political gossip. Nobles, spies, merchants, and adventurers regularly utilize this service to gain advantages over rivals, uncover opportunities, and remain informed about the shifting currents of power throughout the region.
+
+#### Political Socializing
+
+The Fang attracts nobles, guild leaders, diplomats, military officers, wealthy merchants, and other influential figures. Through carefully organized social gatherings, members can establish valuable connections, negotiate agreements, recruit allies, and expand their influence. For many patrons, a single evening of successful socializing can create opportunities worth more than months of formal diplomacy.
+
+#### Social Competitions
+
+Patrons may participate in organized contests of charm, persuasion, wit, courtship, and influence. Victories improve a member's standing within the Ledger of Predators and enhance their reputation throughout the establishment. These competitions transform ordinary social interaction into a prestigious game where status, recognition, and influence are constantly contested and rewarded.
+
+#### Exclusive Gatherings
+
+Invitation-only galas, masquerades, noble salons, and themed celebrations are hosted throughout the year. Attendance is often restricted to select members based on reputation, achievements, or social standing. These gatherings provide rare opportunities to interact with powerful individuals, gain access to exclusive information, and participate in some of the most prestigious events in high society.
+
+#### Hunt Night Participation
+
+Once each week, members may participate in The Fang's famous twenty-four-hour Hunt Night. Using clues, social deduction, alliances, and investigation, participants compete to identify a designated Prey hidden within the club's social network. The event utilizes the Living Map artifact and awards influence, prestige, and ranking points within the Ledger of Predators.
+
+#### Deadman Stew
+Served following Hunt Night, Deadman Stew is prepared from the remains of any participant who perishes during the twenty-four-hour pursuit. Considered both a trophy and a warning, the dish is reserved for members in good standing and consumed as part of The Fang's oldest traditions. Patrons regard each serving as a reminder of the club's central truth: within the hunt, today's predator may become tomorrow's prey.
+:
+
+### Working Hours
+
+Weekdays::: Sunset - 5 AM
+Sundays::: 24 Hours
+:
+### Weekly Program Schedule
+{{fancyTable
+| Day      | Theme                 | Schedule            |
+| :------- | :-------------------- | :------------------------------------------------------------------------------------------------------------ |
+| **Moonday**  | The Gathering         | Arrival Reception • Social Introductions • Noble Networking • Private Lounge Conversations                    |
+| **Earthday** | Courtship Games       | Formal Introductions • Courtship Challenges • Matchmaking Sessions • Companion Lounges                        |
+| **Windday**  | Masks of Desire       | Masquerade Gathering • Anonymous Confessions • Secret Exchange Circles • Identity Revelations                 |
+| **Fireday**  | The Noble Hunt        | Influence Market • Alliance Negotiations • Rivalry Challenges • Secret Objectives                             |
+| **Starday**  | Predators' Gala       | Grand Banquet • Ranking Ceremony • Silver Fang Competition • Noble Gatherings                                 |
+| **Seaday**   | Whispers and Shadows  | Rumor Exchange • Information Auctions • Spy Recruitment • Secret Meetings                                     |
+| **Sunday**   | Hunt Night (24 Hours) | Blood Registration • Living Map Activation • Predator & Prey Competition • Final Rankings & Wager Settlements |
+}}
+
+{{wide}}
+{{pageNumber,auto}}
+
+\page
+
+![menu](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/The%20Fang%20Menu.webp?raw=true){position:absolute,width:100%,left:0,top:0,height:100%}
+
+{{pageNumber,auto}}
+
+\page
+
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+{{wide}}
+
+### Special Event: The Trophy Exhibition
+
+Once each year, The Fang hosts the Trophy Exhibition, an invitation-only celebration where members present a single object that symbolizes the greatest pursuit of their lives. Unlike a display of wealth, every trophy must represent a genuine conquest: a peace treaty earned through difficult negotiation, a lover's first gift, a contract that transformed a merchant's fortune, a broken blade taken from a defeated rival, or any keepsake tied to a defining achievement. Upon arrival, each participant privately explains the story behind their trophy to Lady Rhyssa Huntclaw, who records its significance within the Ledger of Predators. The object is then displayed anonymously so that guests judge only the tale and accomplishment rather than the owner's identity or reputation.
+
+Throughout the evening, patrons wander among the exhibits, exchanging theories about each trophy's origin while its owner remains deliberately undisclosed. Guests are encouraged to question one another, form alliances, bluff, and investigate in an attempt to identify the individuals behind the displayed relics. Friendly wagers, whispered negotiations, and carefully crafted false leads become as entertaining as the exhibition itself. Many participants embellish their stories or subtly redirect suspicion toward rivals, turning every conversation into another hunt where perception is as valuable as truth.
+
+Near midnight, the Exhibition reaches its final ceremony known as **The Unveiling**, during which Lady Rhyssa reveals the owner of every trophy and recounts the authentic story recorded at the beginning of the evening. Guests often discover that the simplest objects conceal the greatest triumphs, while lavish treasures sometimes represent surprisingly hollow victories. Following every revelation, members cast their final vote for the trophy they believe best embodies the philosophy of The Fang: that the worth of any prize is measured not by its value, but by the skill, determination, and sacrifice required to claim it. The evening concludes with the presentation of the Silver Fang Trophy, a ceremonial honor recognizing the year's most remarkable pursuit before the ballroom gradually returns to its customary games of hunters and prey.
+
+{{wide}}
+
+![location-1](https://cdn.midjourney.com/034be8f1-fab8-4fd6-b230-a287b146a59d/0_3.jpeg){position:absolute,top:35px,width:100%,left:20px}
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/page%20location%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+
+
+
+{{pageNumber,auto}}
+
+\page
+
+
+{{wide}}
+
+### Lady Rhyssa Huntclaw
+*Neutral Evil, Female, Panther Beastfolk, 52, Mistress of The Fang*
+:
+Lady Rhyssa Huntclaw was born into a declining beastfolk noble house whose wealth had faded but whose influence remained intact. From an early age, she observed the hypocrisy of high society. Nobles spoke of honor, virtue, and duty in public, yet behind closed doors they pursued pleasure, power, and forbidden desires. More importantly, she noticed that the wealthy were constantly searching for something they could not easily obtain: genuine excitement.
+
+As a young socialite, Rhyssa traveled among royal courts and noble estates, witnessing a pattern repeated across every kingdom. Ambitious commoners dreamed of rising above their station, while bored aristocrats sought new amusements. To Rhyssa, both groups were hunters chasing different prey.
+
+After inheriting her family's remaining fortune, she gathered several influential beastfolk houses and proposed a daring venture. Rather than creating another exclusive noble hub, she envisioned a grand social hunting ground where the elite could mingle with carefully selected artists, adventurers, servants, merchants, performers, and aspiring social climbers. The nobles would gain excitement, romance, influence, and entertainment. The commoners would gain opportunity, wealth, connections, and the possibility of changing their fate.
+
+Thus, The Fang was born.
+
+Officially, the establishment celebrates courtship, competition, and social refinement. Unofficially, it is a carefully controlled ecosystem where predators and prey constantly exchange roles. Some commoners leave with fortunes, titles, or powerful patrons. Others become cautionary tales whispered about during late-night gatherings.
+
+For decades, Rhyssa has ruled from the shadows of her velvet-draped balcony, observing every alliance, rivalry, and seduction. She believes society itself is a hunt, and The Fang merely strips away the illusion. Within its walls, everyone is pursuing something, everyone is being pursued, and only the clever survive long enough to become predators themselves.
+
+#### Behavior
+* Maintains calm confidence in nearly every situation.
+* Prefers observing others before acting.
+* Subtly guides conversations toward desired outcomes.
+* Believes society is a constant struggle between predators and prey.
+* Secretly admires individuals capable of changing their fate through cunning.
+
+ 
+#### How She Talks
+Rhyssa speaks softly and elegantly, never rushing her words or raising her voice. She prefers subtle observations, double meanings, and carefully chosen compliments that often conceal hidden tests or warnings. Even when delivering a threat, she sounds courteous and composed.
+
+**Example Quote:**
+
+*"Tell me, my dear, are you pursuing your ambitions... or are your ambitions pursuing you?"*
+
+
+{{wide,text-align:center
+:
+### Staff of The Fang
+}}
+{{fancyTable,wide
+| Name               | Race              |   Sex  | Age | Position             | Stat Block | Duties                                                                            |
+| :----------------- | :---------------- | :----: | :-: | :------------------- | :------------------: | :-------------------------------------------------------------------------------- |
+| Sylra Duskwhisper  | Fox Beastfolk     | Female |  34 | Information Broker   |          Spy         | Trades rumors, secrets, and valuable information among trusted patrons.           |
+| Torren Goldpaw     | Lion Beastfolk    |  Male  |  46 | Master of Ceremonies |         Bard         | Hosts competitions, announces events, and maintains the flow of the evening.      |
+| Elira Velvetstep   | Catfolk           | Female |  29 | Hostess              |         Noble        | Welcomes guests, verifies invitations, and manages reservations.                  |
+| Cassian Vale       | Human             |  Male  |  52 | Sommelier            |         Noble        | Oversees rare wines, luxury spirits, and private tastings.                        |
+| Mira Quickfingers  | Ratfolk           | Female |  24 | Confidential Courier |         Scout        | Delivers private messages, gifts, and sealed correspondence throughout the manor. |
+| Dorian Ashveil     | Panther Beastfolk |  Male  |  41 | Lounge Steward       |       Commoner       | Supervises private lounges and attends to VIP guests.                             |
+| Lysandra Moondance | Wolf Beastfolk    | Female |  31 | House Performer      |         Bard         | Performs music, dance, and theatrical entertainment throughout the night.         |
+| Brom Irontray      | Bear Beastfolk    |  Male  |  58 | Banquet Supervisor   |        Veteran       | Coordinates serving staff, feasts, and special dining events.                     |
+}}
+{{pageNumber,auto}}
+
+\page
+
+{{wide
+:::
+}}
+
+{{barKeep
+Garrick Redmane
+}}
+
+### Garrick Redmane
+*Lawful Neutral, Male, Lion Beastfolk, 44, Head Barkeep of The Fang*
+:
+A towering lion beastfolk with a magnificent dark-gold mane streaked with silver. Garrick possesses broad shoulders, amber eyes, and a calm, imposing presence. He dresses in immaculate black-and-crimson formal attire tailored to allow easy movement behind the bar. Despite his size, his every movement is precise and deliberate.
+
+Before joining The Fang, Garrick Redmane served as a military officer in a prestigious beastfolk legion. Renowned for his discipline and tactical mind, he spent years maintaining order among soldiers and nobles alike. After a political scandal involving corrupt aristocrats ruined his military career, Garrick abandoned public service and sought a quieter life.
+
+Lady Rhyssa Huntclaw recognized his talents almost immediately. Rather than hiring him as security, she offered him the position of Head Barkeep. The role suited him perfectly. Behind the grand bar of The Fang, Garrick discovered that information flowed as freely as wine. Patrons revealed their ambitions, fears, and secrets after a few drinks, and Garrick became an expert at listening without appearing to listen.
+
+Over the years, he has become one of the few individuals Rhyssa truly trusts. He manages disputes before they become scandals, remembers every patron's preferred drink, and quietly protects the club's reputation. While many guests see him as a simple barkeep, veteran members know that Garrick notices everything and forgets nothing.
+
+
+#### Behavior
+* Calm, disciplined, and exceptionally observant.
+* Speaks only when necessary and listens more than he talks.
+* Values honesty and straightforwardness.
+* Understands the role intrigue plays within The Fang.
+* Protects staff members and vulnerable guests whenever possible.
+
+
+#### How He Talks
+
+Garrick speaks in a deep, measured voice and prefers short, practical statements. He rarely wastes words and often offers advice disguised as casual observations.
+
+**Example Quote**:
+*"The strongest hunters aren't the loudest ones. They're the ones who know when to wait."*
+
+
+
+\column
+
+:::::::::::::::::::::::::::::::::::::
+### Password
+Knock twice, pause, strike once with the back of your hand, and when asked "Hunter or prey?" reply only, "The hunt never ends."
+
+:
+### GM Note
+
+The Fang is best used as a social adventure hub where words carry more weight than weapons. Patrons rarely seek direct confrontation, preferring manipulation, alliances, blackmail, seduction, and political maneuvering to achieve their goals. Encourage players to engage with nobles, spies, merchants, and social climbers through roleplaying, skill challenges, and intrigue-driven encounters. The club works particularly well as a source of rumors, quests, influential contacts, and hidden conspiracies. Whether the characters are pursuing information, investigating scandals, building reputations, or navigating dangerous relationships, The Fang should feel like a place where every conversation matters and every secret has value.
+![bartender](https://cdn.midjourney.com/460d5e2d-be8b-44fe-b0ac-46145edbd354/0_0.jpeg){position:absolute,top:40px,right:30px,width:380px}
+
+![nameBanner](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/nameBanner.webp?raw=true){position:absolute,top:41%,width:250px,left:400px,filter:grayscale(50%)hue-rotate(-20deg)saturate(0.8)contrast(0.85)}
+
+
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/righthand%20page%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+{{pageNumber,auto}}
+
+
+\page
+{{wide}}
+### Kaela Ironfang
+
+*Lawful Neutral, Female, Wolf Beastfolk, 38, Chief Security Officer of The Fang*
+:
+
+A tall and athletic wolf beastfolk with silver-gray fur, piercing ice-blue eyes, and numerous faint scars hidden beneath her immaculate uniform. Kaela wears a tailored black military-style coat accented with silver fang insignias and reinforced leather armor concealed beneath elegant fabrics. Her presence is commanding yet controlled, making troublemakers think twice before causing a disturbance.
+
+
+Kaela Ironfang was born into a respected family of beastfolk wardens who served as protectors of trade routes and noble estates. From an early age, she demonstrated exceptional discipline, physical prowess, and an instinctive ability to assess threats. She eventually rose through the ranks of a royal security force, earning a reputation as an incorruptible guardian.
+
+Her career changed after she uncovered evidence of several powerful nobles abusing their influence to escape justice. When her superiors attempted to bury the investigation, Kaela refused to cooperate. Though her honor remained intact, her position did not. Forced to resign, she spent years working as a bodyguard, bounty hunter, and private investigator.
+
+Lady Rhyssa Huntclaw personally recruited Kaela to oversee security at The Fang. While many questioned why such an honorable woman would work within a den of intrigue, Kaela viewed the position as an opportunity to maintain order where others would exploit chaos. Under her leadership, The Fang has become known for one simple truth: anyone may play the game, but no one is allowed to break the rules.
+
+#### Behavior
+* Constantly alert and aware of her surroundings.
+* Watches crowds with patience and precision.
+* Quickly identifies suspicious behavior and hidden threats.
+* Enforces rules firmly and consistently.
+* Rarely smiles but deeply values trust and loyalty.
+
+
+#### How She Talks
+
+Kaela speaks directly and confidently, choosing clarity over diplomacy. She dislikes flowery language and prefers concise statements that leave no room for misunderstanding.
+
+**Example Quote:**
+*"Enjoy your games, my lord. Just remember—the rules protect everyone, including you."*
+
+{{imgDecoration,npc
+![NPC](https://cdn.midjourney.com/8b57419d-0a0b-42e3-b0ab-04da37c521bb/0_3.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+{{wide}}
+
+
+### Valerio Quicktail
+*Chaotic Neutral, Male, Fox Beastfolk, 35, Head of Entertainment of The Fang*
+
+:
+A handsome red fox beastfolk with vibrant amber fur, golden eyes, and an infectious smile that seems permanently fixed upon his face. Valerio dresses in extravagant velvet coats, jeweled rings, and colorful silks that make him stand out even among The Fang's most flamboyant patrons. He is rarely seen without a notebook tucked beneath one arm and a glass of wine in hand.
+
+
+Valerio Quicktail was born into a family of traveling performers who wandered from city to city entertaining nobles and commoners alike. As a child, he learned music, dance, storytelling, stagecraft, and the delicate art of pleasing a crowd. While other performers focused on mastering a single talent, Valerio became fascinated by what happened behind the curtain. He wanted to know why some performances captivated audiences while others failed.
+
+Over the years, he built a reputation as one of the most gifted event organizers in the kingdom. Noble weddings, royal celebrations, masquerade balls, and prestigious festivals all sought his expertise. His ability to predict trends and understand the desires of wealthy audiences became legendary.
+
+When Lady Rhyssa Huntclaw founded The Fang, she recruited Valerio to transform her establishment into the most desirable destination in high society. Since then, every concert, dance performance, masquerade, competition, and themed gathering within The Fang has passed through his hands. He carefully selects musicians, performers, decorators, and special guests to ensure that no two nights feel the same.
+
+Many believe The Fang's success comes from politics and intrigue. Valerio knows the truth: people come for excitement, and he ensures they never leave disappointed.
+
+#### Behavior
+* Energetic, charismatic, and always in motion.
+* Thrives on creativity and new experiences.
+* Dislikes routine and predictability.
+* Constantly monitors the mood and energy of a room.
+* Knows how to create excitement, romance, mystery, or spectacle.
+
+
+#### How He Talks
+
+Valerio speaks quickly, enthusiastically, and with theatrical flair. He often gestures while speaking and treats ordinary conversations as if they were scenes in a play.
+
+**Example Quote:**
+*"A good evening entertains the guests. A perfect evening becomes a story they'll spend years trying to relive."*
+
+{{npc,imgDecoration
+![NPC](https://cdn.midjourney.com/8b078174-91af-41e5-bcc6-05281aa402b3/0_3.jpeg)
+}}
+
+{{pageNumber,auto}}
+
+
+
+
+
+\page
+
+
+{{wide
+
+}}
+
+### Artifact: The Predator's Map
+
+
+
+*Wondrous Item, Legendary (Requires Attunement)*
+:
+Crafted upon a sheet of enchanted black leather and framed with silver claw-shaped corners, this map appears blank when unrolled. When activated, glowing silver markings emerge across its surface, revealing the surrounding terrain in remarkable detail.
+
+**Mark Prey.** As an action, you can speak the map’s command word and designate up to ten creatures you can see within 120 feet of you. For the next 48 hours, those creatures are magically tracked by the map. While a marked creature is within 50 miles of the map, its location is displayed on the map in real-time. When you mark a creature, you choose to represent it as either a Hunter (a silver fang icon) or Prey (a crimson pawprint).
+
+A creature can only be marked by the map once every 7 days. The mark ends early on a creature if it dies, or if it is targeted by a Dispel Magic spell (cast as a 6th-level spell) or similar magic. This tracking is a Divination effect and cannot locate a creature protected by Nondetection or similar magic.
+
+**Seeker’s Focus.** Once per Long Rest, you can spend 1 minute focusing on a marked creature. If you do, you learn its current direction of travel, its approximate movement speed, and whether it is alone or accompanied by other creatures (though you do not learn the identities of its companions).
+
+**Proximity Alert.** If a marked Hunter comes within 300 feet of a marked Prey, their symbols on the map pulse with light. If you are carrying the map on your person, you mentally receive a silent alert when this occurs.
+
+The Predator's Map was created by the earliest founders of The Fang, who believed that every hunt should be fair and every predator should know when the chase truly begins. Throughout the centuries, the map has been used to oversee elaborate social games, romantic pursuits, noble competitions, and occasionally far more dangerous hunts. Legends claim that every great scandal, forbidden romance, and infamous pursuit connected to The Fang can be traced through the map's hidden records, though no one has ever discovered where those records are stored.
+
+
+{{wide}}
+
+
+
+
+{{imgDecoration,artifact,wide,width:80%,left:10%
+![location-2](https://cdn.midjourney.com/081f7042-531a-48a4-a7bf-6d1e14f22031/0_3.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+{{clubName
+## The Crimson Beat
+{font-size:30px}
+}}
+
+{{ownerName
+Lady Nyxara Valeblood
+}}
+
+{{clubStat
+##### Upper-Class{{width:25px}}Lawful Evil
+}}
+{{wide
+::::::::::::::::::::::::
+}}
+:::::::::::::::::::::::::::::
+The Crimson Beat is a hyper-exclusive gothic nighthub hidden within the wealthiest quarter of the city, where nobles, celebrities, merchants, and thrill-seekers gather to indulge in luxury, mystery, and forbidden pleasures. Beneath crimson chandeliers and candlelit arches, guests lose themselves in haunting music, extravagant celebrations, and private gatherings that stretch until dawn. The hub has earned a reputation as the city's most fashionable destination, attracting those who crave excitement beyond the limits of conventional society.
+
+Behind its elegant façade, however, The Crimson Beat serves a far more sinister purpose. Secretly controlled by an ancient vampire syndicate, the establishment functions as a carefully managed feeding ground where temptation, vice, and obsession are cultivated with precision. Every performance, every invitation, and every whispered promise is designed to draw influential individuals deeper into the hub's web of influence. While most patrons leave with unforgettable memories and dangerous secrets, a select few become valuable assets, willing servants, or unwitting pawns in the vampires' long-term schemes. Within The Crimson Beat, pleasure and danger dance together beneath the same crimson light, and few guests realize how closely they are being watched.
+
+:
+### Origin
+
+The Crimson Beat was founded nearly a century ago by Lady Nyxara Valeblood and a secret coalition of ancient vampire nobles seeking a more subtle means of expanding their influence. For generations, vampire syndicates had relied upon hidden lairs, secluded estates, and shadowy conspiracies to survive among mortals. Nyxara believed such methods were outdated. Rather than hiding from society, she proposed creating a place where the wealthy and powerful would willingly gather beneath one roof. Pooling their vast fortunes, the syndicate purchased a forgotten gothic manor in the city's wealthiest district and transformed it into an extravagant nighthub dedicated to luxury, temptation, and exclusivity.
+
+From its earliest nights, The Crimson Beat became a sensation among the city's elite. Nobles, merchants, artists, and celebrities flocked to its crimson-lit halls in search of excitement unavailable elsewhere. While guests indulged in music, romance, and lavish entertainment, the vampire syndicate quietly cultivated influence through favors, secrets, and carefully managed relationships. Over the decades, the nighthub grew into one of the most prestigious establishments in 
+
+
+![hubOwner](https://cdn.midjourney.com/7e668a65-a08f-4509-b735-741453d11cc7/0_1.jpeg){position:absolute,top:35px,left:25px,width:390px}
+
+![emblem](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/The%20Crimson%20Beat.webp?raw=true){position:absolute,top:95px,right:92px,width:255px}
+
+![nameBanner](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/nameBanner.webp?raw=true){position:absolute,top:45%,width:250px,left:-10px,filter:grayscale(50%)hue-rotate(-20deg)saturate(0.8)contrast(0.85)}
+
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/page%201%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+{{pageNumber,auto}}
+
+
+\page
+{{wide
+
+}}
+
+the realm, attracting influential visitors from distant lands. To the public, it remains a symbol of sophistication and indulgence. To those who know the truth, it is the heart of a vast vampire network where power is measured not by bloodshed, but by the number of souls willingly drawn into its embrace.
+### Specialty 
+
+The Crimson Beat is the crown jewel of the city's nightlife, an exclusive gothic nighthub hidden among the grand estates and private gardens of the wealthiest district. To the public, it is a place of luxury, music, and indulgence where nobles, merchants, artists, celebrities, and aristocrats gather to escape the expectations of their everyday lives. Invitations are highly coveted, admission is carefully controlled, and an evening within its crimson halls is considered a status symbol among the upper class. Many spend years attempting to secure access, while others leverage fortunes and political favors merely to receive an invitation.
+
+The nighthub occupies a sprawling gothic manor concealed behind towering black iron gates and high stone walls draped with crimson ivy. By day, the estate appears quiet and abandoned, but as evening falls, crimson lanterns illuminate the pathways and the manor awakens. Elegant carriages arrive beneath blood-red banners while masked servants escort guests through lavish gardens filled with black roses, marble statues, and moonlit fountains. The entire property is designed to create a sense of mystery and anticipation before visitors ever cross the threshold.
+
+Inside, The Crimson Beat immerses its guests in an atmosphere unlike anywhere else in the city. Massive vaulted ceilings disappear into darkness above crystal chandeliers glowing with crimson light. Velvet curtains, black marble floors, silver candelabras, and ornate gothic architecture create an environment of decadent beauty. Haunting orchestral music mixes with modern rhythms, echoing throughout grand dance floors and luxurious lounges. Musicians, performers, and dancers entertain guests throughout the night while private balconies overlook the festivities below.
+
+The nighthub's greatest attraction is its atmosphere of temptation. Every room encourages indulgence, whether through fine wine, exotic entertainment, passionate romance, or whispered promises made beneath dim candlelight. Private lounges offer absolute discretion, attracting powerful nobles and influential guests seeking privacy for conversations they would never risk having elsewhere. Every corner of the establishment seems designed to encourage secrets, desires, and hidden ambitions to surface.
+
+What makes The Crimson Beat truly unique is the feeling that the entire venue exists outside the ordinary world. Time seems to pass differently within its walls. Patrons often arrive shortly after sunset only to discover dawn approaching far sooner than expected. Conversations become deeper, emotions become stronger, and ordinary caution slowly gives way to temptation. Guests frequently describe the experience as intoxicating even when no alcohol is involved.
+
+Unknown to most visitors, this atmosphere is no accident. The hub is secretly operated by an ancient vampire syndicate that views the establishment as both a feeding ground and a political instrument. Rather than ruling through violence, the vampires cultivate influence through desire, addiction, obsession, and carefully collected secrets. Every guest who enters The Crimson Beat becomes part of a larger game, whether they realize it or not. Some leave with valuable connections, powerful allies, and unforgettable memories. Others leave having surrendered far more than they intended.
+
+The Crimson Beat embodies the seductive nature of darkness itself. It is a place where luxury conceals danger, where pleasure hides manipulation, and where every invitation carries a hidden cost. For many, it is the most exciting place in the city. For the vampire syndicate that controls it, it is the perfect hunting ground.
+
+
+::
+{{imgDecoration,
+![location-2](https://cdn.midjourney.com/0c2fdd06-e4d3-48ef-991b-6c66ac57c740/0_1.jpeg)
+}}
+{{pageNumber,auto}}
+
+
+\page
+
+
+{{wide
+:::
+}}
+
+{{barKeep
+Viktor Graves
+}}
+
+### Membership
+
+Membership is invitation-only. Prospective members must present a Crimson Invitation and whisper the current Midnight Verse—a secret password that changes each month—to enter as a candidate. Rather than an interview, guests are quietly observed throughout the night for discretion, charm, influence, and self-control. Successful candidates gain access to exclusive lounges, private masquerades, hidden balconies, and the prestigious Velvet Covenant, where the city's elite trade favors, secrets, and opportunities.
+
+:
+### Secret
+
+A sealed chamber lies beneath The Crimson Beat known only to Nyxara, Viktor, and Morwen. Hidden within are ledgers spanning centuries, recording every secret, debt, blackmail arrangement, and feeding victim tied to the city's most powerful families. The vampire syndicate's influence depends entirely on these records. If the ledgers were stolen or exposed, noble houses would collapse, riots could erupt, and a city-wide purge of suspected vampires would likely begin.
+
+:
+### Request
+
+Lady Nyxara Valeblood quietly summons the party to a private balcony overlooking the crimson-lit festivities below. During recent masquerades, several guests have reported losing entire hours of memory after attending a secret sequence of parties hidden within the Crimson Beat. The missing memories always involve the same crimson-marked invitations, the same forbidden rooms, and the same overwhelming feelings of euphoria, obsession, and reckless behavior.
+
+Nyxara fears someone within the party hub is manipulating guests outside the syndicate's control. She tasks the party with infiltrating these underground gatherings, following the trail of invitations, earning the trust of attendees, and discovering who is behind the phenomenon before panic spreads among the city's elite. The investigation will require navigating temptation, hidden identities, dangerous social games, and increasingly surreal celebrations where reality itself begins to feel uncertain.
+
+**Reward:** 5,000 gold pieces, permanent access to the Midnight Court, exclusive invitations to future events, and Lady Nyxara's personal favor.
+
+### Working Hours
+
+Open::: Sunset – Dawn
+Blood Moon Galas & Special Events::: Open Until the Last Guest Leaves
+:
+\column
+::::::::::::::::::::::::::::::
+::::::::
+
+### GM Note
+
+The Crimson Beat is best used as a hub for gothic intrigue, social manipulation, forbidden romance, and supernatural conspiracies. While the nighthub appears to be a luxurious venue for music and entertainment, it conceals a sophisticated network of vampire influence operating beneath the surface. Characters may visit seeking information, powerful contacts, rare pleasures, or lucrative opportunities, only to find themselves entangled in schemes that stretch far beyond a single evening. Use the club to create an atmosphere of elegance and temptation where danger is rarely obvious, and enemies prefer charm, blackmail, and seduction over direct violence. Whether the party is uncovering the vampire syndicate's activities, negotiating with powerful patrons, investigating disappearances, or resisting the nighthub's many temptations, The Crimson Beat should feel like a place where every secret has value and every indulgence comes with a price.
+
+![BarkeepIMG](https://cdn.midjourney.com/e5854955-9a55-4907-a1d1-9ad3bdd46496/0_2.jpeg){position:absolute,top:40px,right:30px,width:380px}
+
+![nameBanner](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/nameBanner.webp?raw=true){position:absolute,top:41%,width:250px,left:400px,filter:grayscale(50%)hue-rotate(-20deg)saturate(0.8)contrast(0.85)}
+
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/righthand%20page%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+{{pageNumber,auto}}
+\page
+
+
+{{wide
+
+}}
+
+### Artifact: The Heartstring Harp
+
+
+
+*Wondrous Item, Legendary (Requires Attunement)*
+:
+Fashioned from black rosewood and silver-veined ebony, the Heartstring Harp is a masterwork instrument adorned with crimson gemstones that resemble drops of blood. Its strings are impossibly thin and shimmer faintly in candlelight. Though small enough to be carried by a skilled musician, its music can fill an entire ballroom without magical amplification.
+
+While attuned to the harp, you have Advantage on Charisma (Deception, Performance, and Persuasion) checks. In addition, other creatures have Disadvantage on Wisdom (Insight) checks made against you while you are actively playing the instrument.
+
+Haunting Melody. As an action, you can perform a haunting melody. Each creature of your choice within 60 feet of you that can hear the music must succeed on a DC 18 Wisdom saving throw or have the Charmed condition for 10 minutes. A creature charmed in this way regards you as a trusted and fascinating figure. This condition ends early if you or your allies deal damage to the creature or target it with a harmful effect. Once you use this property, you cannot do so again until you finish a Long Rest.
+
+Echoes of Desire. You can perform for at least 1 minute to probe the mind of a creature within 60 feet that can hear you. The target must make a DC 18 Wisdom saving throw. On a failed save, you learn the target’s greatest ambition, strongest desire, or deepest regret (determined by the GM). On a successful save, the target is unaffected, and you cannot attempt to probe that creature’s mind again for 24 hours. Once you use this property, you cannot do so again for 7 days.
+
+The Crimson Waltz. You can perform this legendary melody for 1 minute. Each creature of your choice within 120 feet of you that can hear the performance must make a DC 18 Wisdom saving throw. On a failed save, a creature experiences vivid visions tied to its most powerful memories, desires, or regrets, and it has Disadvantage on saving throws against being Charmed for the next hour. Once you use this property, you cannot do so again for 30 days.
+
+The Heartstring Harp was commissioned by Lady Nyxara Valeblood during the earliest days of The Crimson Beat. According to legend, the strings were crafted from enchanted silver threads soaked in the tears of heartbroken nobles and woven beneath a blood moon. For generations, the harp has accompanied the nighthub's most famous performances, seductions, and scandals. Many claim that every emotion ever inspired by its music remains trapped within the instrument, waiting to be played once more.
+\column
+
+### Event Table
+{{fancyTable
+| d6 | Event |
+| :-: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | **The Crimson Waltz.** A grand dance begins beneath the blood-red chandeliers. Every guest is expected to find a partner, and rumors spread that those who dance with the right person may gain a powerful favor before the night ends. |
+| 2 | **Masquerade of Desires.** Elegant masks are distributed to every patron. For the remainder of the evening, guests are encouraged to conceal their identities and pursue their deepest desires without fear of judgment. |
+| 3 | **The Midnight Performance.** Lucien Nocturne unveils a rare musical performance. During the show, several guests become strangely emotional, revealing secrets, rivalries, and hidden passions in front of the crowd. |
+| 4 | **The Scarlet Auction.** Wealthy patrons gather in a private lounge to bid on rare treasures, forbidden artifacts, exotic experiences, and mysterious favors. The highest bidder may gain something far more dangerous than expected. |
+| 5 | **A Noble's Indiscretion.** An influential guest becomes intoxicated and accidentally reveals a scandal capable of damaging several powerful families. Before dawn, multiple factions begin maneuvering to control the information. |
+| 6 | **The Blood Moon Gathering.** The vampire syndicate quietly assembles within the nightclub for a secret meeting. Security tightens, private chambers close, and guests may accidentally stumble upon conversations never meant for mortal ears. |
+
+
+}}
+
+:::::
+
+{{imgDecoration,artifact
+![artifact](https://cdn.midjourney.com/93764291-cdeb-423f-a63a-7d29f526fa42/0_2.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+
+
+{{wide
+
+}}
+
+### Services
+
+#### Velvet Lounges
+
+Members may reserve secluded velvet-draped chambers hidden throughout the manor for private celebrations, romantic encounters, confidential negotiations, or discreet business dealings. Club staff guarantees absolute privacy, making these lounges a favored destination for nobles, merchants, and influential figures who wish to remain unseen.
+
+#### Masquerade Experiences
+
+The Crimson Beat hosts themed masquerades where guests adopt masks and temporary identities for the evening. These events encourage freedom from social expectations, allowing patrons to explore hidden desires, forge unusual connections, and enjoy anonymity among the city's elite.
+
+#### Secret Message Exchange
+
+Trusted members may utilize the hub's discreet courier network to deliver anonymous letters, invitations, gifts, and coded messages. The service is highly valued by politicians, lovers, criminals, and nobles seeking communication beyond the reach of spies and rivals.
+
+#### Midnight Court
+
+An exclusive gathering reserved for distinguished members and guests. Within the Midnight Court, influential patrons discuss opportunities, form alliances, settle disputes, and negotiate agreements while enjoying luxury dining and entertainment away from the main ballroom.
+
+#### Memory Vault
+
+Members may deposit written confessions, secrets, contracts, or personal records into magically protected archives maintained by the hub. Access is strictly controlled, and many patrons use the service as insurance against betrayal or political intrigue.
+::
+#### Private Performances
+
+Guests may commission musicians, dancers, actors, poets, and other entertainers for intimate performances within private lounges or hidden gardens. These customized experiences are designed to create unforgettable evenings tailored to the patron's tastes.
+
+#### Crimson Indulgence Packages
+
+For those seeking the complete Crimson Beat experience, staff arranges personalized evenings featuring reserved seating, premium dining, private entertainment, luxury accommodations, and access to restricted areas of the manor. Each package is crafted to meet the patron's specific needs while maintaining complete discretion.
+
+:
+### Weekly Program Schedule
+{{fancyTable
+| Day | Theme | Schedule |
+| :---------------- | :-------------------- | :-------------------------------------------------------------------------------------------- |
+| **First Night** | Crimson Induction | Invitation Verification • Welcome Cocktails • Social Introductions • Velvet Lounge Gatherings |
+| **Second Night** | Temptations Unbound | Luxury Tastings • Flirtation Games • Private Salon Encounters • Midnight Revelries |
+| **Third Night** | The Velvet Masquerade | Mask Distribution • Anonymous Socializing • Secret Confessions • Midnight Unmasking |
+| **Fourth Night** | Beautiful Chaos | Daring Challenges • Exotic Performances • Euphoria Competitions • Crimson Dance Marathon |
+| **Fifth Night** | The Midnight Court | Elite Socializing • Favor Exchanges • Private Audiences • Noble Celebrations |
+| **Sixth Night** | Whispers in the Dark | Secret Auctions • Rumor Trading • Hidden Message Hunts • Restricted Lounge Access |
+| **Seventh Night** | Crimson Eclipse | Invitation-Only Gathering • Surreal Performances • The Crimson Waltz • Dawn's Last Dance |
+}}
+
+{{wide}}
+{{pageNumber,auto}}
+
+\page
+
+![menu](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/Crimson%20Beat%20Menu.webp?raw=true){position:absolute,width:100%,left:0,top:0,height:100%}
+
+{{pageNumber,auto}}
+
+\page
+
+
+
+{{wide}}
+
+### Lady Nyxara Valeblood
+*Lawful Evil, Female, Vampire, 427, Mistress of The Crimson Beat*
+
+
+Lady Nyxara Valeblood was born more than four centuries ago into one of the most influential noble dynasties of a distant empire. Even as a mortal, she possessed an uncanny ability to understand the desires hidden beneath polite smiles and noble etiquette. While her peers sought prestige through warfare, politics, or wealth, Nyxara became fascinated by the invisible forces that truly governed society: temptation, obsession, and ambition. She quickly learned that people could be controlled far more effectively through desire than through fear.
+
+Her fate changed when she caught the attention of an ancient vampire matriarch who recognized her extraordinary potential. Rather than resisting her transformation, Nyxara embraced it willingly, seeing immortality as the ultimate opportunity to refine her mastery over influence. As centuries passed, she traveled across kingdoms and courts, observing rulers rise and fall while quietly weaving networks of favors, secrets, and loyalties that endured long after mortal empires crumbled.
+
+Over time, Nyxara came to believe that true power was never found upon a throne. Instead, it existed in the moments when powerful individuals lowered their guard and revealed their deepest desires. Determined to create a sanctuary where such vulnerabilities could be cultivated, she assembled a syndicate of wealthy vampires and acquired a forgotten gothic manor within the city's most prestigious district. From that estate, she founded The Crimson Beat.
+
+Under Nyxara's leadership, the nighthub evolved into far more than a place of entertainment. Every performance, private lounge, and exclusive gathering was carefully orchestrated to attract the city's elite. While guests indulged in luxury, romance, and excess, Nyxara's agents quietly gathered secrets, debts, and influence. Those who proved valuable were welcomed into her growing web of connections. Those who threatened her interests found themselves manipulated, discredited, or quietly removed from the game.
+
+Today, Lady Nyxara watches over The Crimson Beat from a secluded balcony overlooking the crimson-lit dance floor below. To most patrons, she appears as a graceful hostess, cultured aristocrat, and generous benefactor. Few realize that every whispered conversation and every forbidden indulgence serves her greater designs. After centuries of practice, Nyxara has perfected a simple philosophy: the strongest bonds are forged when people willingly surrender themselves to their desires.
+#### Behavior
+* Speaks with effortless elegance and confidence.
+* Rarely raises her voice or displays strong emotion.
+* Views temptation as a more effective tool than force.
+* Carefully studies the desires and weaknesses of everyone she meets.
+* Prefers long-term manipulation over immediate action.
+
+#### How She Talks
+
+Nyxara speaks softly and deliberately, often sounding more like a trusted confidant than a ruler. Her compliments are sincere enough to be believable, yet carefully crafted to encourage others to reveal more than they intended.
+
+**Example Quote:**
+*"Everyone desires something, my dear. The secret is discovering what they are willing to sacrifice in order to obtain it."*
+
+
+
+{{wide,text-align:center
+
+### Staff of The Crimson Beat
+}}
+{{fancyTable,wide
+### Staff of The Crimson Beat
+
+| Name | Race | Sex | Age | Position | Suggested Stat Block | Duties |
+| :----------------- | :------- | :----: | :-: | :---------------------------- | :------------------: | :----------------------------------------------------------------------------------------------------- |
+| Selene Vexheart | Vampire | Female | 214 | Keeper of Secrets | Spy | Acquires blackmail material, records scandals, and maintains dossiers on influential patrons. |
+| Adrian Mourning | Human | Male | 43 | Voice of the Beat | Bard | Announces performances, introduces special guests, and orchestrates the night's public spectacles. |
+| Vivienne Blackrose | Vampire | Female | 187 | Mistress of Invitations | Noble | Approves membership requests, verifies invitations, and controls access to exclusive chambers. |
+| Lucius Vantrell | Vampire | Male | 264 | Curator of Crimson Vintages | Noble | Oversees rare wines, enchanted spirits, and the club's infamous collection of blood-infused beverages. |
+| Raven Hollow | Tiefling | Female | 29 | Midnight Courier | Scout | Delivers confidential invitations, secret messages, and private arrangements between patrons. |
+| Marcus Dreadveil | Vampire | Male | 156 | Steward of the Velvet Lounges | Commoner | Manages private lounges, arranges discreet meetings, and fulfills VIP requests. |
+| Evelyne Noctis | Vampire | Female | 138 | Chanteuse of Shadows | Bard | Performs haunting musical sets and oversees guest performers and musicians. |
+| Gideon Ashcroft | Human | Male | 57 | Master of Midnight Feasts | Veteran | Coordinates private banquets, luxury dining experiences, and exclusive after-hours gatherings. |
+}}
+{{pageNumber,auto}}
+
+\page
+
+
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+{{wide}}
+
+### Viktor Graves
+*Neutral Evil, Male, Vampire, 318, Head Barkeep of The Crimson Beat*
+
+Viktor Graves was born more than three centuries ago into a minor vampire house that specialized in diplomacy, espionage, and social influence rather than warfare. While many young vampires pursued power through fear and domination, Viktor developed a fascination with mortal society and the countless secrets hidden behind polite smiles and elegant manners.
+
+Throughout the centuries, he traveled among noble courts, royal banquets, and exclusive social circles, studying the desires and ambitions that drove both mortals and immortals. He soon discovered that bartenders often learned more than rulers. Nobles spoke freely after a few drinks, merchants revealed hidden plans, and lovers shared secrets they would never confess elsewhere. Viktor became a master of listening, learning that information was often more valuable than blood.
+
+His talents eventually attracted the attention of Lady Nyxara Valeblood. Recognizing a kindred spirit, she invited Viktor to join her growing vampire syndicate. When The Crimson Beat was established, Viktor became its first barkeep and has served behind the obsidian bar ever since.
+
+Over the decades, he transformed the bar into one of the most prestigious destinations in the city. Rare wines, enchanted spirits, and exotic beverages flow through his hands nightly, attracting nobles, artists, merchants, and thrill-seekers alike. While guests believe they visit him for drinks and conversation, Viktor quietly gathers information about every patron who enters the establishment.
+
+Today, he remains one of Nyxara's most trusted confidants. He knows countless secrets, remembers every face he has ever served, and has watched generations of mortal patrons rise, fall, and disappear. Despite his age, he remains perfectly composed, preferring to observe the game rather than participate directly.
+
+
+#### Behavior
+* Calm, composed, and endlessly patient.
+* Rarely reveals his true thoughts.
+* Listens far more than he speaks.
+* Possesses an exceptional memory for faces, names, and secrets.
+* Treats every patron with equal courtesy.
+
+#### How He Talks
+
+Viktor speaks in a smooth, refined tone that never feels rushed. He often answers questions with observations rather than direct responses and has a habit of making people feel understood without revealing anything about himself.
+
+**Example Quote:**
+*"People rarely come here for the wine. The wine simply gives them permission to say what they were already thinking."*
+
+
+![location-1](https://cdn.midjourney.com/937d3c74-90b4-4d50-b16f-a18ebbff66f9/0_0.jpeg){position:absolute,top:35px,width:100%,left:20px}
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/page%20location%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+
+
+
+{{pageNumber,auto}}
+
+
+\page
+
+
+{{wide}}
+### Lady Morwen Thorne
+
+*Lawful Evil, Female, Vampire, 286, Chief Security Officer of The Crimson Beat*
+
+Lady Morwen Thorne was once a feared commander in the service of a powerful vampire lord during a series of brutal territorial conflicts that shaped the modern vampire underworld. Unlike many of her kin, she never sought influence through charm or manipulation. Her talents lay in discipline, strategy, and the efficient application of force. For over a century, she led elite vampire enforcers, protecting her master's interests and hunting those foolish enough to challenge his authority.
+
+When her former lord was destroyed during a failed coup, Morwen found herself without purpose for the first time in centuries. Many expected her to establish her own domain, but she had little interest in politics. Instead, she accepted an invitation from Lady Nyxara Valeblood, who recognized the value of a warrior capable of maintaining order in a place where countless powerful individuals gathered each night.
+
+As Chief Security Officer of The Crimson Beat, Morwen oversees an extensive network of guards, informants, and undercover agents. While guests admire the club's luxury and entertainment, few realize how closely they are monitored. Morwen has spent decades refining security procedures that allow the nightclub to remain both welcoming and exceptionally safe for its favored patrons. Criminals, troublemakers, and hunters seeking to expose the vampire syndicate rarely make it far before attracting her attention.
+
+Although she serves Nyxara loyally, Morwen remains one of the few individuals willing to speak bluntly to the hub's owner. Their relationship is built upon mutual respect, forged through centuries of experience and shared understanding.
+
+#### Behavior
+* Constantly scans rooms for potential threats.
+* Remains calm and focused in stressful situations.
+* Values discipline and professionalism above personal feelings.
+* Rarely trusts first impressions.
+* Believes preparation prevents most problems.
+
+#### How She Talks
+
+Morwen speaks directly and efficiently, rarely wasting words. Her voice is calm and authoritative, carrying the confidence of someone accustomed to command.
+
+**Example Quote:**
+*"Enjoy your evening. My responsibility is ensuring you survive it."*
+
+{{imgDecoration,npc
+![NPC](https://cdn.midjourney.com/23bf98fc-1d26-41dc-8c51-5372969ff8d4/0_3.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+
+
+{{wide}}
+### Lucien Nocturne
+
+*Neutral Evil, Male, Vampire, 173, Head of Entertainment of The Crimson Beat*
+
+Lucien Nocturne spent his mortal life as a celebrated composer whose performances captivated royal courts across multiple kingdoms. Even before his transformation, he possessed an extraordinary understanding of emotion and spectacle. He believed that music was more than entertainment—it was a tool capable of influencing moods, shaping decisions, and manipulating entire crowds.
+
+His talents eventually drew the attention of a circle of vampire patrons who frequently attended his performances. Fascinated by his ability to control a room through melody alone, they offered him immortality in exchange for his service. Lucien accepted without hesitation, seeing undeath as an opportunity to perfect his craft beyond the limitations of a mortal lifespan.
+
+For more than a century, Lucien traveled throughout the world studying exotic musical traditions, theatrical performances, masquerades, and cultural celebrations. He amassed a vast network of musicians, performers, dancers, illusionists, and artists whose talents he could call upon at a moment's notice.
+
+When Lady Nyxara Valeblood established The Crimson Beat, she recruited Lucien to oversee its entertainment. Since then, every performance, song selection, masquerade, private concert, themed gathering, and grand celebration has passed through his hands. Nothing occurs on the nighthub's stage without his approval. He carefully orchestrates every evening to guide the emotions of guests, ensuring the atmosphere remains seductive, exciting, and unforgettable.
+
+Many patrons believe the nighthub's success comes from its exclusivity or luxury. Lucien knows better. People return because they remember how The Crimson Beat made them feel.
+
+#### Behavior
+* Constantly evaluates the mood of a room.
+* Obsessed with creating perfect experiences.
+* Thrives on creativity and artistic expression.
+* Likes the word iron.
+* Demands excellence from performers and staff.
+
+
+#### How He Talks
+
+Lucien speaks with theatrical enthusiasm and treats ordinary conversations like scenes from a performance. He often describes emotions, people, and events using artistic metaphors.
+
+**Example Quote:**
+*"A crowd is no different from an orchestra. Every heart has a rhythm—my task is ensuring they all beat together."*
+
+{{imgDecoration,npc
+![NPC](https://cdn.midjourney.com/207e536f-0b52-472a-8bc2-890123dc6a1e/0_0.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+
+{{clubName,top:500px
+## The Apothecary's Draft
+{font-size:25px,}
+}}
+
+{{ownerName
+Professor Aurelia Vex
+}}
+
+{{clubStat,top:660px
+##### Middle-Class{{width:20px}}Chaotic Neutral
+}}
+{{wide
+::::::::::::::::::::::::
+}}
+:::::::::::::::::::::::::::::
+The Apothecary's Draft is the city's most unpredictable party hub, a sprawling alchemical wonderland built within a former guild laboratory where science, magic, and nightlife collide. Beneath glowing crystal tubing, bubbling potion vats, and suspended glass reactors filled with luminous liquids, patrons gather to indulge in experimental drinks and magical experiences unlike anything found elsewhere. Every night brings a new selection of concoctions capable of producing strange but harmless effects: glowing skin, shifting hair colors, temporary levitation, vivid hallucinations, emotional euphoria, or surreal sensory distortions. Alchemists and magical mixologists perform demonstrations throughout the venue while guests dance beneath cascades of enchanted light and drifting clouds of colorful vapor.
+
+Behind the spectacle, however, lies a far more dangerous enterprise. The Apothecary's Draft secretly serves as the city's largest underground market for poisons, antidotes, forbidden reagents, and experimental substances. Assassins, healers, adventurers, criminals, and nobles quietly conduct business through coded orders hidden among ordinary drink requests. Rare ingredients change hands in private laboratories while powerful toxins are traded alongside life-saving cures. Most visitors see only a vibrant celebration of magical experimentation, never realizing that beneath the music and glowing cocktails exists a carefully managed network capable of deciding who lives, who dies, and who profits from both.
+
+:
+### Origin
+
+The Apothecary's Draft began as an experimental alchemy laboratory dedicated to researching new magical formulas, unusual reagents, and innovative brewing techniques. Researchers spent years developing cosmetic enchantments, sensory-altering elixirs, and other experimental concoctions within its crystal-lined halls. As demonstrations became more frequent, curious visitors began attending simply to witness the strange effects and sample harmless prototypes for themselves.
+
+Over time, the demonstrations became gatherings, the gatherings became celebrations, and the laboratory gradually evolved into a thriving party hub. Rather than abandon its roots, the venue embraced them. Brewing vats, distillation chambers, and alchemical equipment remain at the center of daily operations, allowing patrons to experience magical experimentation firsthand. Beneath the festivities, however, a hidden 
+
+
+
+![hubOwner](https://cdn.midjourney.com/989a5aff-4bd6-4c9e-84e9-f3e5dc47777e/0_1.jpeg){position:absolute,top:35px,left:25px,width:390px}
+
+![emblem](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/The%20Apothecary_s%20Draft.webp?raw=true){position:absolute,top:95px,right:92px,width:255px}
+
+![nameBanner](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/nameBanner.webp?raw=true){position:absolute,top:45%,width:250px,left:-10px,filter:grayscale(50%)hue-rotate(-20deg)saturate(0.8)contrast(0.85)}
+
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/page%201%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+{{pageNumber,auto}}
+
+
+\page
+{{wide
+
+}}
+market for poisons, antidotes, and rare alchemical substances quietly flourishes among trusted clientele.
+### Specialty 
+
+What makes The Apothecary's Draft truly unique is that every drink served within its walls is an alchemical creation rather than an ordinary beverage. Guests do not simply order wine, ale, or spirits. Instead, they choose from an ever-changing catalog of experimental concoctions designed to produce temporary magical effects. A single evening might leave a patron glowing with colorful light, floating inches above the dance floor, surrounded by illusory butterflies, or seeing music as vibrant waves of color. The uncertainty surrounding each formula creates an atmosphere of excitement where every drink feels like a new adventure.
+
+The venue itself reinforces this sense of experimentation. Unlike conventional party hubs, The Apothecary's Draft resembles a living laboratory. Glass tubes carrying luminous liquids crisscross the ceilings, enormous potion vats bubble behind transparent walls, and enchanted apparatus constantly distill new ingredients throughout the night. Patrons are encouraged to observe the brewing process, transforming alchemy from a hidden profession into a form of entertainment. Many visitors spend as much time watching the experiments as they do socializing.
+
+Another defining feature is the culture of discovery that permeates the establishment. New formulas are introduced regularly during public demonstrations and experimental showcases. Patrons often compete to be among the first to sample recently developed concoctions, eager to experience effects no one has encountered before. Successes are celebrated, failures become stories repeated for weeks, and every new invention contributes to the venue's reputation as the city's center of magical innovation.
+
+The famous Shuffle Shot embodies this philosophy better than any other offering. Sold for a fraction of the cost of most specialty drinks, it contains a completely random alchemical effect selected from the establishment's vast collection of formulas. Some guests receive harmless cosmetic enchantments while others experience bizarre sensory distortions or euphoric magical phenomena. The unpredictability has transformed the drink into both a game and a rite of passage. Entire groups gather around first-time visitors simply to witness the results.
+
+The Apothecary's Draft is also one of the few places where alchemical expertise is treated as a luxury service. Patrons can consult directly with skilled brewers, commission custom potions, discuss rare ingredients, or participate in private brewing sessions. Wealthy clients often seek cosmetic enchantments, while adventurers search for unusual consumables and collectors pursue formulas unavailable anywhere else. This constant exchange of knowledge has made the venue a gathering place for researchers, experimenters, and magical entrepreneurs.
+
+Beneath the public festivities exists a hidden economy that further distinguishes the hub from its competitors. While ordinary guests enjoy glowing cocktails and magical entertainment, coded transactions quietly occur among trusted clientele. Rare antidotes, forbidden reagents, experimental toxins, and difficult-to-obtain ingredients circulate through discreet channels hidden within the business. The same establishment capable of supplying life-saving remedies can also provide substances feared throughout the criminal underworld.
+
+Perhaps most remarkable is the balance between wonder and danger. Most visitors remember The Apothecary's Draft as a place of vibrant lights, strange magic, and unforgettable experiences. Yet beneath every glowing potion and every cheerful experiment lies the knowledge that true alchemy is neither entirely safe nor entirely predictable. That tension between excitement and risk gives the party hub its distinctive identity. Guests arrive seeking entertainment, but they return because nowhere else in the city makes magical experimentation feel so thrillingly alive.
+
+::
+
+{{imgDecoration,
+![location-2](https://cdn.midjourney.com/f3b399a2-1f66-446a-89d7-baba703e59e2/0_2.jpeg)
+}}
+{{pageNumber,auto}}
+
+
+\page
+
+
+{{wide
+:::
+}}
+
+{{barKeep
+Zixil Varn
+}}
+
+### Membership
+
+Membership is open to any patron willing to embrace experimentation. Applicants must purchase a membership and sign an alchemical liability waiver acknowledging the unpredictable nature of experimental concoctions. Members gain access to premium potion flights, private brewing sessions, experimental showcases, cosmetic enchantments, and early access to newly developed formulas. Long-standing members who regularly participate in research and provide valuable feedback receive priority access to rare services and restricted consultations.
+:
+### Secret
+
+Beneath The Apothecary's Draft lies a sealed laboratory where Professor Aurelia Vex continues forbidden research into distilled emotions. Joy, desire, fear, obsession, and euphoria can be extracted from living people and refined into rare alchemical ingredients. While most drinks are harmless, a handful of exclusive formulas still rely on these substances. Only Aurelia and Zixil know the truth. If exposed, the party hub would face scandal, panic, and likely violent retaliation.
+
+:
+### Request
+
+Professor Aurelia Vex discreetly asks the party for help after a recent Experimental Showcase goes terribly wrong. An unfinished concoction known as Dream Bloom Prime was accidentally consumed by several patrons before testing was complete. The formula was designed to create a shared dream experience, allowing multiple people to experience the same fantasy. Instead, it trapped the affected patrons within a vivid collective dream while their bodies continue wandering the Apothecary's Draft.
+
+Each night, the dream grows stronger, causing strange, magical effects throughout the venue. Illusions appear without warning, memories become unreliable, and some guests struggle to separate reality from fantasy. Aurelia believes the only way to stop the phenomenon is for the party to drink a controlled version of the formula and enter the shared dream themselves. Somewhere within the shifting landscape of desires, fears, and memories lies the source of the instability. If it is not found soon, everyone connected to the dream may become trapped forever.
+
+**Reward:** 5,000 gold pieces, lifetime membership at the Apothecary's Draft, unrestricted access to private brewing sessions, and priority access to future experimental concoctions.
+
+
+
+\column
+::::::::::::::::::::::::::::::
+::::::::
+### Working Hours
+
+Weekdays::: 4 PM – 4 AM
+Experimental Showcase Nights::: 4 PM – Sunrise
+:
+### GM Note
+
+The Apothecary's Draft is best used as a hub of magical experimentation, unpredictable encounters, and hidden dangers. Encourage players to embrace curiosity, unusual potion effects, and social interactions shaped by alchemical chaos. Beneath the colorful lights and bizarre concoctions lies a thriving underground market dealing in poisons, antidotes, and forbidden substances. The venue works equally well for mystery, investigation, social intrigue, and lighthearted misadventures. Whether characters seek rare ingredients, uncover illicit trades, test experimental formulas, or navigate the consequences of magical accidents, every visit should feel exciting, unpredictable, and slightly dangerous.
+
+
+![BarkeepIMG](https://cdn.midjourney.com/e1ee971d-e127-47c2-ae82-66cd38f133d4/0_3.jpeg){position:absolute,top:40px,right:30px,width:380px}
+
+![nameBanner](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/nameBanner.webp?raw=true){position:absolute,top:41%,width:250px,left:400px,filter:grayscale(50%)hue-rotate(-20deg)saturate(0.8)contrast(0.85)}
+
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/righthand%20page%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+{{pageNumber,auto}}
+\page
+
+
+
+### Artifact: The Alembic of Endless Possibilities
+
+
+
+*Wondrous Item, Legendary (Requires Attunement)*
+:
+This masterwork alembic is crafted from enchanted crystal, gold-plated brass, and silver runework. Colorful liquids endlessly circulate through its chambers without ever mixing, shifting through hundreds of vibrant hues every hour. The device is warm to the touch and emits a faint hum whenever a new alchemical reaction occurs within its glass coils.
+
+While attuned to the alembic, you have Advantage on Intelligence (Arcana) and Intelligence (Alchemist's Supplies) checks. In addition, when you use Alchemist's Supplies to craft a potion or alchemical item, the crafting time and GP cost are halved.
+
+**Prototype Elixir.** Once per Long Rest, you can spend 1 hour using the alembic to brew a volatile prototype elixir. Roll a d6 to determine its experimental effect, which lasts for 1 hour: 
+* On a 1 (Buoyancy), the consumer gains a Fly speed of 20 feet (hover).
+* On a 2 (Sensory Overload), the consumer gains Advantage on Wisdom (Perception) checks and Darkvision out to 120 feet.
+* On a 3 (Chameleon Skin), the consumer's skin shifts colors, granting Advantage on Dexterity (Stealth) checks.
+* On a 4 (Phantasmal Aura), the consumer is surrounded by harmless, illusory duplicates, giving attacks against them Disadvantage.
+* On a 5 (Aquatic Adaptation), the consumer can breathe underwater and gains a Swim speed equal to their Speed.
+* On a **6 (Vocal Shift)**, the consumer can perfectly mimic any voice they have heard and has Advantage on Charisma (Deception) checks.
+
+Alternatively, you can work with the GM to choose a comparable non-damaging effect. The elixir loses its potency and becomes useless if not consumed before your next Long Rest.
+
+**Experimental Breakthrough.** Once every 7 days, you can craft any potion of Rare rarity or lower without possessing its formula. You must still provide the required GP worth of raw materials, though this cost is still halved by the alembic’s passive property.
+
+**The Grand Draft.** Once every 30 days, you can spend 8 uninterrupted hours brewing a masterpiece concoction. Upon completion, choose a magical effect from any potion (up to Very Rare) or a non-damaging spell of 5th level or lower. 
+
+When consumed, the potion grants this effect for 24 hours. If the chosen spell requires Concentration, the consumer must concentrate on it to maintain the effect. If the spell requires a Spell Save DC or Spell Attack Roll, use your Intelligence Spell Save DC/Attack modifier, or DC 17 (+9 to hit), whichever is higher.
+
+
+
+
+### Event Table
+{{fancyTable
+| d6 | Event |
+| :-: | :--------------- |
+| 1 | **Potion Roulette Frenzy.** A special round of Potion Roulette begins, with patrons competing to consume increasingly bizarre concoctions. The winner receives a rare experimental formula, but several participants experience unusual effects that begin interacting in unpredictable ways. |
+| 2 | **Experimental Showcase.** Professor Aurelia Vex unveils a newly developed potion before a packed audience. Volunteers are invited to test the formula publicly, though no one is entirely certain what the final effects will be. |
+| 3 | **The Shuffle Shot Challenge.** The house offers discounted Shuffle Shots all night. Patrons flood the bar seeking thrills, and the party quickly fills with glowing skin, levitating dancers, illusory companions, and other strange magical side effects. |
+| 4 | **Alchemical Malfunction.** One of the brewing vats begins producing unstable magical vapor. Colorful hallucinations spread through the party hub, causing guests to experience vivid visions, emotional outbursts, and surreal encounters until the situation is contained. |
+| 5 | **The Antidote Auction.** Word spreads that an exceptionally rare antidote has become available through discreet channels. Wealthy patrons, healers, adventurers, and suspiciously interested buyers gather to compete for ownership while hidden negotiations occur throughout the venue. |
+| 6 | **Dream Bloom Night.** A popular batch of Dream Bloom-inspired cocktails turns the evening into a shared spectacle of vivid emotions, enhanced sensations, and dreamlike illusions. As the night progresses, reality and imagination become increasingly difficult for patrons to distinguish. |
+
+
+}}
+
+
+
+{{imgDecoration,artifact
+![artifact](https://cdn.midjourney.com/4f3b4b7a-1af4-478d-917c-d08e8f332090/0_3.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+
+
+{{wide
+
+}}
+
+
+
+### Services
+
+#### Experimental Potion Flights
+
+Patrons may sample curated selections of magical concoctions designed to showcase a variety of temporary effects. Each flight offers a unique combination of sensory alterations, cosmetic enchantments, and alchemical experiences guided by the hub's expert brewers.
+
+#### Private Brewing Sessions
+
+Guests can work directly with the venue's alchemists to create personalized concoctions. Participants learn basic brewing techniques, select ingredients, and leave with custom potions crafted to match their preferences.
+
+#### Cosmetic Enchantments
+
+Temporary magical transformations are available for patrons seeking a unique appearance. Popular effects include glowing skin, shifting hair colors, sparkling eyes, illusionary accessories, and other harmless cosmetic alterations.
+
+#### Alchemical Consultations
+
+Experienced researchers provide advice regarding potions, magical substances, rare ingredients, antidotes, and experimental formulas. Adventurers, collectors, and curious patrons frequently utilize this service.
+
+#### Rare Antidote Procurement
+
+Through discreet channels, patrons may acquire difficult-to-obtain antidotes and counteragents. The service is especially valuable for those dealing with exotic poisons, magical toxins, and unusual afflictions.
+
+#### Experimental Showcase Access
+
+Members may attend demonstrations where newly developed formulas are unveiled and tested. Guests often volunteer to experience effects firsthand and provide feedback on the latest alchemical creations.
+
+#### Potion Roulette
+
+One of the venue's most popular attractions. Participants consume randomly selected magical concoctions and compete for prizes, prestige, and bragging rights while embracing the unpredictable nature of experimental alchemy.
+
+:
+### Weekly Program Schedule
+{{fancyTable
+| Day | Theme | Schedule |
+| :------- | :-------------------- | :---------------------------------------------------------------------------------------------- |
+| **Moonday** | Happy Concoction Hour | Discount Potion Samples • Casual Tastings • Cosmetic Enchantments • Social Gatherings |
+| **Earthday** | Experimental Showcase | New Formula Demonstrations • Volunteer Testing • Alchemist Presentations • Research Discussions |
+| **Windday** | Potion Flights | Guided Tastings • Private Brewing Sessions • Alchemical Consultations • Formula Discovery |
+| **Fireday** | Arcane Dance Session | Magical Lighting Displays • Levitation Dances • Live Entertainment • Illusion Performances |
+| **Starday** | Potion Roulette | Shuffle Shot Competitions • Random Concoctions • Prize Challenges • Crowd Celebrations |
+| **Seaday** | Night Laboratory | Rare Antidote Procurement • Ingredient Exchanges • Restricted Consultations • Private Deals |
+| **Sunday** | Last Call Experiments | Prototype Formula Trials • Experimental Showcases • Volunteer Testing • Closing Celebrations |
+
+}}
+
+{{wide}}
+:::
+
+    The Alembic of Endless Possibilities was created by the mysterious founder of The Apothecary's Draft during the establishment's earliest years. According to legend, it was built to answer a single question: "What if every drink could become a discovery?" Hundreds of famous formulas, revolutionary medicines, disastrous accidents, and world-changing breakthroughs have passed through its crystal chambers. Even now, alchemists claim the device occasionally invents entirely new recipes while no one is watching.
+
+![cosmetic](https://cdn.midjourney.com/33788952-043c-4443-96fe-ad811e24f8c1/0_0.jpeg){width:50%,mix-blend-mode:multiply,position:absolute,left:50%,top:60%}
+{{pageNumber,auto}}
+
+\page
+
+![menu](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/Apothecary_s%20Draft%20Menu.webp?raw=true){position:absolute,width:100%,left:0,top:0,height:100%}
+
+{{pageNumber,auto}}
+
+\page
+
+
+
+{{wide}}
+
+### Professor Aurelia Vex
+*Chaotic Neutral, Female, Human, 52, Founder of The Apothecary's Draft*
+
+Aurelia Vex spent much of her life working within the experimental alchemy laboratory that would eventually become The Apothecary's Draft. While many researchers focused on practical applications such as healing tonics, industrial reagents, and magical utility, Aurelia became fascinated by a different question entirely: how magic could alter experience itself. She studied formulas that affected emotions, perception, confidence, creativity, and sensation, believing that alchemy had the power to transform not only the body but the way people experienced the world around them.
+
+Over the years, her experiments became increasingly unconventional. Visitors to the laboratory were often invited to sample harmless prototypes that caused glowing skin, colorful illusions, temporary levitation, or unusual sensory effects. To Aurelia's surprise, people enjoyed these demonstrations as much as the scientific discoveries themselves. What began as casual experimentation gradually evolved into gatherings, celebrations, and eventually a thriving nightlife destination built around magical experiences.
+
+Rather than abandoning research when the venue became successful, Aurelia embraced the transformation. She redesigned the laboratory into a sprawling party hub where experimentation remained central to everything. Every drink became a potential discovery. Every patron became a source of observations and inspiration. The bubbling vats, glowing crystal tubes, and endless stream of new concoctions ensured that the spirit of experimentation never disappeared.
+
+Today, Aurelia oversees every aspect of The Apothecary's Draft. She encourages innovation among her staff, funds the development of new formulas, and personally approves many of the experimental drinks introduced during public showcases. To most guests she appears to be an eccentric but brilliant hostess who genuinely enjoys watching people have fun. Few realize that she still views the entire establishment as a living laboratory.
+
+Unlike many proprietors, Aurelia is not driven primarily by wealth or influence. She is motivated by curiosity. She wants to know how people react to magic, how experiences shape memories, and what happens when individuals are given the freedom to temporarily become someone different. For her, every night offers new knowledge, new stories, and new possibilities.
+#### Behavior
+* Speaks enthusiastically about new discoveries and experiments.
+* Frequently carries a notebook filled with observations and ideas.
+* Encourages guests to try new experiences.
+* Rarely condemns unusual behavior unless it endangers others.
+* Values curiosity, creativity, and self-expression.
+
+#### How She Talks
+
+Aurelia speaks quickly and energetically, often becoming distracted by new ideas before finishing old ones. She approaches conversations with genuine enthusiasm and tends to treat everyone as a potential collaborator in a fascinating experiment.
+
+**Example Quote:**
+*"The potion is only half the formula. The truly interesting ingredient is discovering how you react to it."*
+
+
+
+{{wide,text-align:center
+:
+### Staff of The Apothecary's Draft
+}}
+{{fancyTable,wide
+### Staff of The Apothecary's Draft
+
+| Name | Race | Sex | Age | Position | Suggested Stat Block | Duties |
+| :----------------- | :------- | :----: | :-: | :----------------------- | :------------------: | :--------------------------------------------------------------------------------------- |
+| Talia Quickfizz | Gnome | Female | 42 | Senior Potion Brewer | Mage | Develops new potion formulas, prepares experimental drinks, and assists with showcases. |
+| Dorn Ashvale | Human | Male | 51 | Ingredient Master | Commoner | Sources ingredients, manages inventory, and verifies the quality of alchemical supplies. |
+| Nyssa Moonpetal | Elf | Female | 127 | Cosmetic Enchanter | Mage | Performs temporary magical transformations and cosmetic enchantments for patrons. |
+| Korrin Blackbrew | Dwarf | Male | 88 | Distillation Supervisor | Veteran | Oversees brewing equipment, potion vats, and daily production schedules. |
+| Vexa Sparkwhistle | Gnome | Female | 35 | Shuffle Shot Coordinator | Bard | Administers Potion Roulette, manages Shuffle Shot events, and records unusual outcomes. |
+| Corvin Shade | Drow | Male | 119 | Antidote Specialist | Mage | Prepares rare antidotes, identifies toxins, and handles emergency poison treatments. |
+| Seraphine Glowmist | Elf | Female | 145 | Arcane Lighting Director | Bard | Controls magical lighting effects, visual spectacles, and dance floor enchantments. |
+| Gruk Stonefist | Half-Orc | Male | 46 | Floor Marshal | Guard | Patrols public areas, assists security, and handles disruptive patrons. |
+}}
+{{pageNumber,auto}}
+
+\page
+
+
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+{{wide}}
+
+### Zixil Varn
+*Neutral Evil, Male, Drow, 137, Head Barkeep of The Apothecary's Draft*
+
+Zixil Varn has spent more than a century studying substances capable of changing lives in an instant. While most alchemists pursued healing, magical enhancement, or academic prestige, Zixil became fascinated by the thin line separating medicine from poison. To him, every antidote suggested a toxin, and every toxin suggested an antidote. Understanding both was the only way to truly master either.
+{font-size:12px}
+When The Apothecary's Draft began evolving from an experimental laboratory into a thriving party hub, Zixil immediately recognized its potential. The venue attracted curious drinkers, ambitious adventurers, eccentric researchers, wealthy patrons, and reckless thrill-seekers—all people willing to pay for unusual experiences and rare substances. It provided opportunities that no traditional laboratory could match.
+{font-size:12px}
+
+As Head Barkeep, Zixil transformed the bar into the center of the establishment's hidden economy. Guests visit him for colorful cocktails, experimental potion flights, and the famous Shuffle Shot. Most never realize that countless private arrangements pass through the same counter. Information, rare ingredients, restricted reagents, poisons, and life-saving antidotes all move through carefully coded conversations disguised as ordinary drink orders.
+{font-size:12px}
+
+Over the years, Zixil became the quiet architect behind the city's underground poison and antidote market. He rarely manufactures the substances himself. Instead, he connects buyers with sellers, verifies quality, settles disputes, and ensures business remains profitable for everyone involved. His influence comes not from force, but from being the one person everyone eventually needs.
+{font-size:12px}
+
+Today, Zixil stands behind the glowing bar each night, observing the chaos of The Apothecary's Draft with calm amusement. While patrons lose themselves in magical experiences and experimental concoctions, he quietly gathers information, builds leverage, and expands a network that stretches far beyond the walls of the party hub.
+{font-size:12px}
+
+
+#### Behavior
+* Rarely appears surprised by anything.
+* Pays close attention to details others overlook.
+* Values information more highly than gold.
+* Enjoys conversations that reveal a person's true motives.
+* Maintains perfect composure even during emergencies.
+
+#### How He Talks
+
+Zixil speaks with smooth confidence and measured patience. He rarely speaks more than necessary, but when he does, people tend to listen. He has a habit of making simple observations sound like hidden lessons.
+
+**Example Quote:**
+
+*"People think they come here searching for a drink. Most are actually searching for a solution to a problem they haven't admitted yet."*
+{{wide}}
+
+![location-1](https://cdn.midjourney.com/2c311724-c7a6-4d7c-adeb-ee2e6850ea92/0_3.jpeg){position:absolute,top:35px,width:100%,left:20px}
+![background](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/page%20location%20transparent.webp?raw=true){position:absolute,top:0,left:0,width:100%}
+
+
+
+
+{{pageNumber,auto}}
+
+
+\page
+
+
+{{wide}}
+### Garruk Vale
+
+*Lawful Neutral, Male, Half-Orc, 43, Chief Security Officer of The Apothecary's Draft*
+
+Garruk Vale never intended to spend his life guarding alchemists. In his younger years, he earned a reputation for solving problems with his fists rather than his words. That approach served him well until he discovered that broken furniture, broken bones, and broken egos often created more problems than they solved. Over time, he learned that preventing trouble required far more skill than winning a fight.
+
+When the former laboratory began transforming into The Apothecary's Draft, Garruk was hired to maintain order during increasingly crowded gatherings. What started as simple crowd control quickly evolved into something far more complicated. Guests were not merely drinking; they were consuming experimental magical concoctions capable of producing unpredictable effects. Every evening presented new challenges that no ordinary tavern guard would ever encounter.
+
+As the venue grew, Garruk became an essential part of its operation. He developed procedures for dealing with intoxicated patrons, magical accidents, dangerous reactions, and disputes caused by poor decisions made under the influence of experimental substances. His ability to remain calm while everyone around him panicked earned him the respect of both staff and regular guests.
+
+Unlike many security officers, Garruk prefers conversation to confrontation. He understands that most people visit The Apothecary's Draft seeking freedom, excitement, and escape from ordinary life. His goal is not to control them but to ensure that their search for adventure does not become a disaster for everyone else. When force becomes necessary, however, he applies it quickly and without hesitation.
+
+Today, Garruk patrols the venue each night with quiet confidence. He knows nearly every regular patron, recognizes the warning signs of trouble before it starts, and has prevented countless incidents from escalating into catastrophe. While others chase excitement, Garruk remains focused on keeping the party alive.
+
+#### Behavior
+* Constantly watches crowds rather than individuals.
+* Prefers preventing problems to solving them.
+* Values responsibility, professionalism, and self-control.
+* Has little patience for people who endanger others through recklessness.
+* Treats staff and patrons fairly regardless of status.
+
+#### How He Talks
+
+Garruk speaks directly and confidently, rarely wasting words. He has a practical sense of humor and often delivers warnings in a calm tone that somehow makes them sound more serious.
+
+**Example Quote:**
+
+*"Enjoy yourself. That's why we're here. Just remember that every bad decision starts with someone saying, 'Watch this.'"*
+
+{{imgDecoration,npc
+![NPC](https://cdn.midjourney.com/229603c1-dd94-49e4-a65d-3aca90229f98/0_0.jpeg)
+}}
+{{pageNumber,auto}}
+
+\page
+
+
+{{wide}}
+### Lyra Nightshade
+
+*Chaotic Neutral, Female, Elf, 128, Head of Entertainment of The Apothecary's Draft*
+
+Lyra Nightshade has always been fascinated by experiences that people remember for the rest of their lives. While others studied alchemy to create medicines, poisons, or practical magical tools, Lyra became obsessed with a different pursuit entirely: creating moments. She believed that a single unforgettable night could change a person more profoundly than years of ordinary living.
+
+When The Apothecary's Draft began evolving from an experimental laboratory into a nightlife destination, Lyra immediately saw possibilities others overlooked. The glowing potions, magical effects, and endless stream of experimental formulas were not merely products; they were ingredients for entertainment. She began designing gatherings that combined alchemy, music, illusion, and social interaction into immersive experiences unlike anything available elsewhere.
+
+Over time, Lyra transformed the venue's entertainment program into its greatest attraction. The Experimental Showcase, Potion Roulette, Arcane Dance Sessions, and countless themed celebrations all bear her influence. She constantly searches for new ways to surprise guests, believing predictability is the enemy of excitement. A patron who knows exactly what will happen is a patron who will eventually stop coming.
+
+Despite her reputation for chaos, Lyra's events are carefully planned beneath the surface. Every light display, potion effect, performance, and activity is orchestrated to encourage interaction, self-expression, and unforgettable experiences. Guests often believe the evening unfolded naturally when, in reality, Lyra spent weeks designing the conditions that made those moments possible.
+
+Today, she spends most nights moving throughout the venue, observing reactions, gathering ideas, and searching for inspiration. To some patrons she is a visionary entertainer. To others she is a troublemaker with too much imagination. Lyra considers both descriptions compliments.
+
+#### Behavior
+* Encourages guests to embrace spontaneity and self-expression.
+* Constantly searches for new experiences and inspirations.
+* Believes there is order in chaos.
+* Loves surprising people with the unexpected.
+* Views entertainment as an art form rather than a business.
+
+#### How She Talks
+
+Lyra speaks with contagious enthusiasm and boundless confidence. She often sounds as though she is inviting people into an adventure rather than a conversation. Even ordinary suggestions somehow feel exciting when delivered by her.
+
+**Example Quote:**
+
+*"The best nights are never the ones you planned. They're the ones you couldn't have imagined."*
+
+{{imgDecoration,npc
+![NPC](https://cdn.midjourney.com/9d87ca2e-f1df-48bb-b675-67d36c0abe68/0_1.jpeg)
+}}
+{{pageNumber,auto}}
+
+
+
+
+
+
+\page
+
+
+{{dividerTitle
+Playlists
+
+}}
+
+![menu](https://cdn.midjourney.com/1f77e117-8c3e-45a5-b11f-4d8a149dd0f4/0_2.jpeg){position:absolute,width:100%,left:0,top:0,height:100%}
+
+![cismetic](https://github.com/fabfictionrpg/paging/blob/main/Euphoria/PlaylistDivider.webp?raw=true){position:absolute,width:70%,top:30%,left:15%}
+
+
+{{pageNumber,auto}}
+
+\page
+:::::::
+
+
+{{wide,playlist
+<div class='video-section'><h2>The Fang</h2><div class='video-grid'><a href='https://youtu.be/BC-SCz07SHQ?si=WutxnzmcxeBIU1H9' target='_blank'><img src='https://img.youtube.com/vi/BC-SCz07SHQ/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FBC-SCz07SHQ%3Fsi%3DWutxnzmcxeBIU1H9'></a><a href='https://youtu.be/nlcIKh6sBtc?si=VjAwECVNLUCeFvNj' target='_blank'><img src='https://img.youtube.com/vi/nlcIKh6sBtc/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FnlcIKh6sBtc%3Fsi%3DVjAwECVNLUCeFvNj'></a><a href='https://youtu.be/6NiZtdHTaQY?si=4u1XxpJiJLCOYPbx' target='_blank'><img src='https://img.youtube.com/vi/6NiZtdHTaQY/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2F6NiZtdHTaQY%3Fsi%3D4u1XxpJiJLCOYPbx'></a><a href='https://youtu.be/ulplqXTp4R0?si=NNlifBc8xmPPSBLr' target='_blank'><img src='https://img.youtube.com/vi/ulplqXTp4R0/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FulplqXTp4R0%3Fsi%3DNNlifBc8xmPPSBLr'></a></div></div>
+}}
+
+
+{{wide,playlist
+<div class='video-section'><h2>The Crimson Beat</h2><div class='video-grid'><a href='https://youtu.be/uqkULUOurC4?si=A1kr6voAfBLh8fvq' target='_blank'><img src='https://img.youtube.com/vi/uqkULUOurC4/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FuqkULUOurC4%3Fsi%3DA1kr6voAfBLh8fvq'></a><a href='https://youtu.be/PbviwAuEXqc?si=IOtbmvg_L0kevVvu' target='_blank'><img src='https://img.youtube.com/vi/PbviwAuEXqc/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FPbviwAuEXqc%3Fsi%3DIOtbmvg_L0kevVvu'></a><a href='https://youtu.be/fHnpVIW7Qx0?si=XmGFafucx3bqHoZP' target='_blank'><img src='https://img.youtube.com/vi/fHnpVIW7Qx0/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FfHnpVIW7Qx0%3Fsi%3DXmGFafucx3bqHoZP'></a><a href='https://youtu.be/yKdHus_8pqI?si=rCQGapPodrZ0fvzY' target='_blank'><img src='https://img.youtube.com/vi/yKdHus_8pqI/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FyKdHus_8pqI%3Fsi%3DrCQGapPodrZ0fvzY'></a></div></div>
+}}
+
+
+\page
+:::::::
+
+{{wide,playlist
+<div class='video-section'><h2>The Apothecary's Draft</h2><div class='video-grid'><a href='https://youtu.be/3CBTfCjuDyA?si=HffGHh9U51vAuQgr' target='_blank'><img src='https://img.youtube.com/vi/3CBTfCjuDyA/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2F3CBTfCjuDyA%3Fsi%3DHffGHh9U51vAuQgr'></a><a href='https://youtu.be/9m-r4rxUpa8?si=xqBy-GdKsQIuylOw' target='_blank'><img src='https://img.youtube.com/vi/9m-r4rxUpa8/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2F9m-r4rxUpa8%3Fsi%3DxqBy-GdKsQIuylOw'></a><a href='https://youtu.be/Ph54wQG8ynk?si=sfSMbXqLraSVZwtP' target='_blank'><img src='https://img.youtube.com/vi/Ph54wQG8ynk/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FPh54wQG8ynk%3Fsi%3DsfSMbXqLraSVZwtP'></a><a href='https://youtu.be/UbQgXeY_zi4?si=3J_XwCxyBRVwkvjp' target='_blank'><img src='https://img.youtube.com/vi/UbQgXeY_zi4/mqdefault.jpg'><img class='qr' src='https://api.qrserver.com/v1/create-qr-code/?size=80x80&color=552222&bgcolor=F5EAD2&data=https%3A%2F%2Fyoutu.be%2FUbQgXeY_zi4%3Fsi%3D3J_XwCxyBRVwkvjp'></a></div></div>
+}}
+ 
+
+![cosmetic](https://cdn.midjourney.com/1dc9b35f-624f-423d-8535-18fffdf064e6/0_1.jpeg){width:114%,mix-blend-mode:multiply,position:absolute,left:-7%,top:50%}
+

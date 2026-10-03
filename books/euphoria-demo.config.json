@@ -1,0 +1,18 @@
+{
+  "bookId": "euphoria-demo",
+  "title": "Euphoria Demo",
+  "entryHeadingLevel": 2,
+  "images": [
+    {
+      "match": { "alt": "emblem" },
+      "action": "move",
+      "location": "entry-top",
+      "className": "entry-emblem",
+      "width": "180px"
+    },
+    {
+      "match": { "alt": ["background", "menu", "nameBanner"] },
+      "action": "ignore"
+    }
+  ]
+}

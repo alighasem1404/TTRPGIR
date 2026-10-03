@@ -1,0 +1,117 @@
+{
+  "format": "ttrpg-book",
+  "schemaVersion": 1,
+  "book": {
+    "id": "euphoria-demo",
+    "title": "Euphoria Demo",
+    "description": "A sample exported book package for testing the Book Maker and Book Reader contract.",
+    "version": "0.1.0",
+    "tags": ["euphoria", "demo", "homebrewery-import"]
+  },
+  "source": {
+    "format": "homebrewery-markdown",
+    "fileName": "Euphoria Demo.txt"
+  },
+  "conversion": {
+    "entryHeadingLevel": 2,
+    "pageBreaks": "ignore",
+    "imagePolicy": {
+      "defaultPlacement": "inline",
+      "ignoredRoles": ["background", "page-overlay", "menu", "decorative-banner"],
+      "ignorePositioning": true
+    }
+  },
+  "theme": {
+    "tokens": {
+      "color.background": "#f5ead2",
+      "color.backgroundLight": "#fbf4e5",
+      "color.surface": "#efe0c0",
+      "color.primary": "#6f2637",
+      "color.primaryDark": "#4d1a25",
+      "color.accent": "#b68a3d",
+      "color.accentLight": "#d9b86c",
+      "color.text": "#4a3825",
+      "color.textMuted": "#7a6143",
+      "color.border": "#c8a463",
+      "font.body": "Georgia, serif",
+      "font.ui": "Inter, sans-serif"
+    },
+    "decorations": {
+      "parchmentTexture": true,
+      "ornamentalFrames": true,
+      "ornamentalDividers": true,
+      "tableHeaderStyle": "wine",
+      "imageCaptionStyle": "italic-muted"
+    }
+  },
+  "assets": [
+    {
+      "id": "the-fang-emblem",
+      "src": "https://github.com/fabfictionrpg/paging/blob/main/Euphoria/The%20Fang.webp?raw=true",
+      "alt": "The Fang emblem",
+      "role": "emblem"
+    },
+    {
+      "id": "the-fang-owner",
+      "src": "https://cdn.midjourney.com/93394ff2-3701-45ee-80d7-691f321d9e7a/0_3.jpeg",
+      "alt": "The Fang owner",
+      "role": "portrait"
+    }
+  ],
+  "entries": [
+    {
+      "id": "welcome",
+      "title": "Welcome",
+      "order": 0,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "style": "lead",
+          "text": "We are profoundly grateful—not just for your financial support, but for the trust and belief you've placed in our vision from the very beginning."
+        }
+      ]
+    },
+    {
+      "id": "the-fang",
+      "title": "The Fang",
+      "order": 1,
+      "blocks": [
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "The Fang"
+        },
+        {
+          "type": "image",
+          "assetId": "the-fang-emblem",
+          "role": "emblem",
+          "placement": "entry-top-right",
+          "className": "entry-emblem",
+          "width": "150px"
+        },
+        {
+          "type": "paragraph",
+          "text": "The Fang is an exclusive social hunting ground where wealthy nobles, influential merchants, and ambitious socialites gather to pursue excitement beyond the boundaries of conventional society."
+        },
+        {
+          "type": "heading",
+          "level": 3,
+          "text": "Origin"
+        },
+        {
+          "type": "paragraph",
+          "text": "The Fang was founded nearly three decades ago by Lady Rhyssa Huntclaw and several influential beastfolk noble houses."
+        },
+        {
+          "type": "table",
+          "columns": ["d6", "Event"],
+          "rows": [
+            ["1", "The Courtship Challenge"],
+            ["2", "A Dangerous Secret"],
+            ["3", "The Silver Toast"]
+          ]
+        }
+      ]
+    }
+  ]
+}
