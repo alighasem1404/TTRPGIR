@@ -14,17 +14,21 @@
   const saveCropButton = byId("pdfSaveCrop");
   const useCropButton = byId("pdfUseCrop");
   const outline = byId("pdfCropOutline");
+  const pane = byId("pdfReviewPane");
+  const highlight = byId("pdfImageHighlight");
   let attachment;
   let crop;
   let drag;
   let replacementPicker;
+  let pageNavigation;
 
   window.bookmakerPdf = {
     setMarkdownAvailable(available) {
       detachPdf();
       byId("attachPdf").disabled = !available;
     },
-    getRecoverySource
+    getRecoverySource,
+    endRecovery
   };
 
   byId("attachPdf").addEventListener("click", () => picker.click());
@@ -35,20 +39,17 @@
     picker.value = "";
     if (file) attachPdf(file);
   });
-  byId("pdfPrevious").addEventListener("click", () => showPage(attachment.page - 1));
-  byId("pdfNext").addEventListener("click", () => showPage(attachment.page + 1));
-  pageNumber.addEventListener("change", () => showPage(Number(pageNumber.value)));
+  byId("pdfPrevious").addEventListener("click", () => navigatePage(attachment.page - 1));
+  byId("pdfNext").addEventListener("click", () => navigatePage(attachment.page + 1));
+  byId("jumpPdfPage").addEventListener("submit", (event) => {
+    event.preventDefault();
+    navigatePage(pageNumber.valueAsNumber);
+  });
   cropButton.addEventListener("click", () => setCropMode(cropButton.getAttribute("aria-pressed") !== "true"));
   saveCropButton.addEventListener("click", saveCrop);
   useCropButton.addEventListener("click", () => {
     const surface = cropCanvas();
     if (surface) chooseReplacement(surface, attachment.page, "crop");
-  });
-  dialog.addEventListener("close", () => {
-    if (dialog.open || !replacementPicker) return;
-    const { onBack } = replacementPicker;
-    setReplacementPicker(null);
-    onBack();
   });
   canvas.addEventListener("pointerdown", beginCrop);
   canvas.addEventListener("pointermove", updateCrop);
@@ -111,7 +112,8 @@
       pageNumber.max = current.document.numPages;
       byId("pdfPageTotal").textContent = `of ${current.document.numPages}`;
       window.imageRecovery?.setPdfAttached(true);
-      openInspector();
+      if (window.imageRecovery) window.imageRecovery.openReview();
+      else openInspector();
     } catch (error) {
       if (attachment !== current) return;
       detachPdf();
@@ -132,6 +134,24 @@
     if (!current?.document) return null;
     return {
       pages: current.document.numPages,
+      show(onChoose, onNavigate) {
+        if (attachment !== current) return;
+        const host = byId("recoveryPdfPane");
+        if (pane.parentElement !== host) {
+          host.append(pane);
+          byId("pdfEmbeddedImages").open = false;
+        }
+        setCropMode(false);
+        setReplacementPicker(onChoose);
+        pageNavigation = onNavigate;
+        if (!current.request) showPage(current.page);
+      },
+      focus(number, bounds) {
+        if (attachment !== current) return;
+        current.highlight = bounds ? { number, bounds } : null;
+        if (number !== current.page || !current.request) showPage(number);
+        else updateHighlight();
+      },
       text: (number, signal) => withPdfPage(current, number, signal, async (page) => {
         const text = await page.getTextContent();
         return { items: text.items.filter((item) => item.str?.trim()), view: page.view };
@@ -154,13 +174,7 @@
         const candidate = candidates.find((image) => image.index === index);
         if (!candidate) throw new Error("The embedded image is unavailable.");
         return pngBlob(imageCanvas(candidate, current.pdfjs.ImageKind));
-      }),
-      pick(number, onChoose, onBack) {
-        if (attachment !== current) return;
-        setReplacementPicker({ onChoose, onBack });
-        dialog.showModal();
-        if (byId("pdfPageBody").hidden || number !== current.page) showPage(number);
-      }
+      })
     };
   }
 
@@ -178,18 +192,55 @@
 
   function setReplacementPicker(picker) {
     replacementPicker = picker;
-    dialog.toggleAttribute("data-picking", Boolean(picker));
+    pane.toggleAttribute("data-picking", Boolean(picker));
     useCropButton.hidden = !picker;
   }
 
-  async function chooseReplacement(surface, page, label) {
+  function endRecovery() {
+    pageNavigation = null;
+    setReplacementPicker(null);
+    setCropMode(false);
+    if (attachment) attachment.highlight = null;
+    updateHighlight();
+    byId("pdfInspectorHome").append(pane);
+    byId("pdfEmbeddedImages").open = true;
+  }
+
+  function navigatePage(number) {
+    if (!attachment?.document) return;
+    pageNavigation?.();
+    attachment.highlight = null;
+    showPage(number);
+  }
+
+  function updateHighlight() {
+    const active = attachment?.highlight;
+    const viewport = attachment?.viewport;
+    highlight.hidden = !active || !viewport || active.number !== attachment.page;
+    if (highlight.hidden) return;
+    const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(active.bounds);
+    const clamp = (value, max) => Math.min(max, Math.max(0, value));
+    const left = clamp(Math.min(x1, x2), canvas.width);
+    const top = clamp(Math.min(y1, y2), canvas.height);
+    highlight.style.left = `${100 * left / canvas.width}%`;
+    highlight.style.top = `${100 * top / canvas.height}%`;
+    highlight.style.width = `${100 * (clamp(Math.max(x1, x2), canvas.width) - left) / canvas.width}%`;
+    highlight.style.height = `${100 * (clamp(Math.max(y1, y2), canvas.height) - top) / canvas.height}%`;
+    const host = byId("recoveryPdfPane");
+    if (pane.parentElement !== host) return;
+    const figure = highlight.getBoundingClientRect();
+    const visible = host.getBoundingClientRect();
+    if (figure.top < visible.top || figure.bottom > visible.bottom) {
+      host.scrollTop += (figure.top + figure.bottom - visible.top - visible.bottom) / 2;
+    }
+  }
+
+  async function chooseReplacement(surface, page, label, bounds) {
     const picker = replacementPicker;
     try {
       const blob = await pngBlob(surface);
       if (!picker || replacementPicker !== picker) return;
-      setReplacementPicker(null);
-      dialog.close();
-      picker.onChoose({ blob, page, label });
+      picker({ blob, page, label, bounds });
     } catch {
       if (picker && replacementPicker === picker) pageStatus.textContent = "This image could not be prepared. Try another image or a crop.";
     }
@@ -202,6 +253,8 @@
     const request = {};
     current.request = request;
     current.page = number;
+    current.viewport = null;
+    updateHighlight();
     const stillCurrent = () => attachment === current && current.request === request;
     current.render?.cancel();
     current.pageProxy?.cleanup();
@@ -234,7 +287,9 @@
 
       canvas.width = rendered.width;
       canvas.height = rendered.height;
+      byId("pdfPreviewStage").style.setProperty("--pdf-page-ratio", canvas.width / canvas.height);
       canvas.getContext("2d").drawImage(rendered, 0, 0);
+      current.viewport = viewport;
       const text = textResult.value?.items.filter((item) => typeof item.str === "string") || [];
       const candidates = imageResult.value || [];
       byId("pdfPageText").textContent = text.map((item) => item.str + (item.hasEOL ? "\n" : " ")).join("").trim()
@@ -245,8 +300,12 @@
         byId("pdfImageSummary").textContent = "Embedded images could not be read. Select a page crop to recover a figure.";
       }
       byId("pdfPageBody").hidden = false;
+      updateHighlight();
     } catch (error) {
-      if (stillCurrent()) pageStatus.textContent = `Could not render page ${number}. ${error.message}`;
+      if (stillCurrent()) {
+        current.request = null;
+        pageStatus.textContent = `Could not render page ${number}. ${error.message}`;
+      }
     }
   }
 
@@ -392,7 +451,11 @@
       use.type = "button";
       use.className = "pdf-use-image";
       use.textContent = `Use image ${index} as replacement`;
-      use.addEventListener("click", () => chooseReplacement(imageCanvas(candidate, kinds), page, `image-${index}`));
+      use.addEventListener("click", () => {
+        attachment.highlight = { number: page, bounds: candidate.bounds };
+        updateHighlight();
+        chooseReplacement(imageCanvas(candidate, kinds), page, `image-${index}`, candidate.bounds);
+      });
       const entry = document.createElement("li");
       entry.append(button, use);
       entries.push(entry);

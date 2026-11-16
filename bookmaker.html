@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=17" />
+    <link rel="stylesheet" href="styles.css?v=19" />
   </head>
   <body>
     <div class="app-shell maker-page">
@@ -164,35 +164,51 @@
           <h2 id="imageRecoveryTitle">Recover images</h2>
           <form method="dialog"><button type="submit">Close</button></form>
         </div>
-        <p id="recoveryStatus" class="pdf-status" role="status"></p>
-        <div class="pdf-toolbar">
+        <form id="recoverySetup" hidden>
+          <fieldset>
+            <legend>Suggest filenames for all recovered images using</legend>
+            <label><input type="radio" name="recoveryNaming" value="h2" checked /> H2 heading</label>
+            <label><input type="radio" name="recoveryNaming" value="h3" /> Nearest H3 heading</label>
+          </fieldset>
+          <button type="submit">Start recovery</button>
+        </form>
+        <div id="recoveryActions" class="pdf-toolbar" hidden>
+          <p id="recoveryStatus" class="pdf-status" role="status"></p>
           <button id="scanImageLinks" type="button">Check image links again</button>
           <button id="cancelImageScan" type="button" hidden>Cancel scan</button>
+          <button id="viewRecoveredPreview" type="button" hidden>View in preview</button>
         </div>
-        <div id="recoveryReview" hidden>
-          <div class="recovery-field">
-            <label for="brokenImageList">Image to review</label>
-            <select id="brokenImageList"></select>
+        <div id="recoveryLayout" class="recovery-layout" hidden>
+          <div id="recoveryPdfPane" aria-label="Matching PDF"></div>
+          <div id="recoveryReview" hidden>
+            <nav class="pdf-toolbar" aria-label="Images to recover">
+              <button id="previousRecovery" type="button">Previous image</button>
+              <button id="nextRecovery" type="button">Next image</button>
+              <span id="recoveryPosition" aria-live="polite"></span>
+            </nav>
+            <form id="jumpRecoveryPage" class="pdf-toolbar">
+              <label><span id="recoveryPageLabel">Markdown page</span> <input id="recoveryPageNumber" type="number" min="1" required /></label>
+              <button type="submit">Jump to image</button>
+              <button id="nextRecoveryPage" type="button">Next Markdown page</button>
+            </form>
+            <p id="recoveryContext"></p>
+            <form id="recoveryForm" hidden>
+              <div class="recovery-field">
+                <label for="recoveryFileName">PNG filename</label>
+                <input id="recoveryFileName" type="text" dir="auto" maxlength="96" required />
+                <label for="recoveryCaption">Reader caption</label>
+                <input id="recoveryCaption" type="text" dir="auto" />
+              </div>
+              <img id="recoveryChosenImage" alt="Selected replacement image" hidden />
+              <div class="pdf-toolbar">
+                <button id="applyRecovery" type="submit" disabled>Apply replacement &amp; continue</button>
+                <button id="skipRecovery" type="button">Skip image</button>
+                <button id="restoreRecovery" type="button" hidden>Restore original link</button>
+              </div>
+            </form>
+            <p id="recoveryConfidence" class="pdf-status" role="status"></p>
+            <ul id="recoveryCandidates" aria-label="Suggested PDF images"></ul>
           </div>
-          <p id="recoveryContext"></p>
-          <p id="recoveryConfidence" class="pdf-status" role="status"></p>
-          <ul id="recoveryCandidates" aria-label="Suggested PDF images"></ul>
-          <div class="pdf-toolbar">
-            <button id="browseRecoveryPdf" type="button">Browse PDF or crop</button>
-            <button id="skipRecovery" type="button">Skip image</button>
-            <button id="restoreRecovery" type="button" hidden>Restore original link</button>
-          </div>
-          <form id="recoveryForm" hidden>
-            <img id="recoveryChosenImage" alt="Selected replacement image" />
-            <div class="recovery-field">
-              <label for="recoveryFileName">PNG filename</label>
-              <input id="recoveryFileName" type="text" maxlength="96" required />
-              <label for="recoveryCaption">Reader caption</label>
-              <input id="recoveryCaption" type="text" dir="auto" />
-            </div>
-            <button type="submit">Apply replacement</button>
-          </form>
-          <p class="pdf-status">Applied images appear in the preview and are included in the book ZIP.</p>
         </div>
       </dialog>
       <dialog id="pdfInspector" aria-labelledby="pdfInspectorTitle">
@@ -200,10 +216,14 @@
           <h2 id="pdfInspectorTitle">Review PDF</h2>
           <form method="dialog"><button type="submit">Close</button></form>
         </div>
+        <div id="pdfInspectorHome"><div id="pdfReviewPane">
         <div class="pdf-toolbar">
           <button id="pdfPrevious" type="button">Previous page</button>
-          <label>Page <input id="pdfPageNumber" type="number" min="1" value="1" /></label>
-          <span id="pdfPageTotal"></span>
+          <form id="jumpPdfPage" class="pdf-page-jump">
+            <label>PDF page <input id="pdfPageNumber" type="number" min="1" value="1" required /></label>
+            <span id="pdfPageTotal"></span>
+            <button type="submit">Go</button>
+          </form>
           <button id="pdfNext" type="button">Next page</button>
         </div>
         <p id="pdfPageStatus" class="pdf-status" role="status"></p>
@@ -217,19 +237,23 @@
             <p id="pdfCropHint" hidden>Drag a rectangle over the figure you want to save.</p>
             <div id="pdfPreviewStage">
               <canvas id="pdfPageCanvas" aria-label="Rendered PDF page"></canvas>
+              <div id="pdfImageHighlight" aria-hidden="true" hidden></div>
               <div id="pdfCropOutline" aria-hidden="true" hidden></div>
             </div>
           </section>
-          <section aria-labelledby="pdfImagesTitle">
-            <h3 id="pdfImagesTitle">Embedded images</h3>
-            <p id="pdfImageSummary"></p>
-            <ul id="pdfImages"></ul>
+          <section aria-label="PDF page contents">
+            <details id="pdfEmbeddedImages" open>
+              <summary>Embedded images</summary>
+              <p id="pdfImageSummary"></p>
+              <ul id="pdfImages"></ul>
+            </details>
             <details>
               <summary>Page text</summary>
               <pre id="pdfPageText"></pre>
             </details>
           </section>
         </div>
+        </div></div>
       </dialog>
       <dialog id="bookZipExport" aria-labelledby="bookZipExportTitle">
         <h2 id="bookZipExportTitle">Export book ZIP</h2>
@@ -244,8 +268,8 @@
     <script src="image-viewer.js?v=1"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=1"></script>
-    <script src="app.js?v=15"></script>
-    <script src="pdf-import.js?v=3" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
-    <script src="image-recovery.js?v=2"></script>
+    <script src="app.js?v=16"></script>
+    <script src="pdf-import.js?v=5" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
+    <script src="image-recovery.js?v=4"></script>
   </body>
 </html>

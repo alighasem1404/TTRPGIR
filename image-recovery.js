@@ -4,17 +4,25 @@
   const openButton = byId("openImageRecovery");
   const status = byId("recoveryStatus");
   const confidence = byId("recoveryConfidence");
-  const list = byId("brokenImageList");
+  const setup = byId("recoverySetup");
+  const pageNumber = byId("recoveryPageNumber");
   const candidates = byId("recoveryCandidates");
   const form = byId("recoveryForm");
   const chosenImage = byId("recoveryChosenImage");
+  const fileNameInput = byId("recoveryFileName");
+  const previewButton = byId("viewRecoveredPreview");
   const skipped = new Set();
   let result;
   let scan;
   let selection;
   let draft;
+  let pageIndex;
+  let reviewIndex = 0;
+  let naming;
+  let lastApplied;
 
   window.imageRecovery = {
+    openReview,
     setPdfAttached(attached) {
       openButton.hidden = !attached;
       if (!attached) reset();
@@ -22,38 +30,70 @@
   };
 
   openButton.addEventListener("click", openReview);
+  setup.addEventListener("submit", (event) => {
+    event.preventDefault();
+    naming = new FormData(setup).get("recoveryNaming");
+    showSetup(false);
+    scanBook();
+  });
   byId("scanImageLinks").addEventListener("click", scanBook);
   byId("cancelImageScan").addEventListener("click", () => scan?.abort());
-  list.addEventListener("change", () => reviewSlot());
-  byId("browseRecoveryPdf").addEventListener("click", browsePdf);
+  byId("previousRecovery").addEventListener("click", () => reviewSlot(reviewIndex - 1));
+  byId("nextRecovery").addEventListener("click", () => reviewSlot(reviewIndex + 1));
+  byId("nextRecoveryPage").addEventListener("click", () => {
+    const page = nextSourcePage(sourcePage(selection.slot));
+    reviewSlot(result.slots.findIndex((slot) => sourcePage(slot) === page));
+  });
+  pageNumber.addEventListener("input", () => pageNumber.setCustomValidity(""));
+  byId("jumpRecoveryPage").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const index = result.slots.findIndex((slot) => sourcePage(slot) === pageNumber.valueAsNumber);
+    if (index === -1) {
+      pageNumber.setCustomValidity(`No images to review on this ${result.hasPages ? "Markdown page" : "entry"}.`);
+      pageNumber.reportValidity();
+    } else reviewSlot(index);
+  });
+  previewButton.addEventListener("click", () => {
+    if (!lastApplied) return;
+    dialog.close();
+    showRecoveredImage(lastApplied);
+  });
   byId("skipRecovery").addEventListener("click", () => {
-    skipped.add(list.value);
-    renderResults(list.value);
-    status.textContent = "Skipped. You can select this image again to review it.";
+    skipped.add(selection.slot.key);
+    renderResults(nextReviewIndex());
   });
   byId("restoreRecovery").addEventListener("click", () => {
+    if (lastApplied?.key === selection.slot.key) {
+      lastApplied = null;
+      previewButton.hidden = true;
+    }
     updateImageRecovery(selection.slot, null);
-    renderResults(list.value);
+    renderResults(reviewIndex);
     status.textContent = "Restored the original link in the preview.";
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!draft || !selection) return;
     const { slot } = selection;
-    const fileName = uniqueFileName(byId("recoveryFileName").value, slot.key);
+    const fileName = uniqueFileName(fileNameInput.value, takenFileNames(slot.key));
     if (!fileName) {
       status.textContent = "Enter a filename with at least one letter or number.";
-      byId("recoveryFileName").focus();
+      fileNameInput.focus();
       return;
     }
     const caption = byId("recoveryCaption").value.trim();
     updateImageRecovery(slot, { blob: draft.blob, caption, fileName, page: draft.page, label: draft.label });
+    lastApplied = slot;
+    previewButton.hidden = false;
     skipped.delete(slot.key);
-    renderResults(slot.key);
+    renderResults(nextReviewIndex());
     status.textContent = `Applied ${fileName} in ${slot.entryTitle}.`;
   });
   dialog.addEventListener("close", () => {
-    if (!dialog.open) scan?.abort();
+    if (dialog.open) return;
+    scan?.abort();
+    stopSelection();
+    window.bookmakerPdf.endRecovery();
   });
 
   function reset() {
@@ -61,17 +101,32 @@
     scan = null;
     stopSelection();
     result = null;
+    pageIndex = null;
+    reviewIndex = 0;
+    naming = null;
+    lastApplied = null;
+    previewButton.hidden = true;
+    setup.reset();
     skipped.clear();
     byId("scanImageLinks").disabled = false;
     byId("cancelImageScan").hidden = true;
-    list.replaceChildren();
     candidates.replaceChildren();
     if (dialog.open) dialog.close();
   }
 
   function openReview() {
-    dialog.showModal();
+    showSetup(!naming);
+    if (!dialog.open) dialog.showModal();
+    if (!naming) return;
     if (result?.source !== state.source) scanBook();
+    else if (result.slots.length) reviewSlot(reviewIndex);
+    else result.pdf.show();
+  }
+
+  function showSetup(show) {
+    setup.hidden = !show;
+    byId("recoveryActions").hidden = show;
+    byId("recoveryLayout").hidden = show;
   }
 
   async function scanBook() {
@@ -79,10 +134,11 @@
     stopSelection();
     const pdf = window.bookmakerPdf.getRecoverySource();
     if (!pdf) return;
+    pdf.show();
     const job = new AbortController();
     scan = job;
     const { signal } = job;
-    const preferred = list.value;
+    const preferred = result?.slots[reviewIndex]?.key;
     result = null;
     byId("recoveryReview").hidden = true;
     byId("scanImageLinks").disabled = true;
@@ -95,9 +151,9 @@
       const links = await checkImageLinks(urls, signal, (done) => {
         status.textContent = `Checking image links (${done}/${urls.length})…`;
       });
-      const needsReview = slots.filter((slot) => links.get(slot.url) === "broken" || state.recoveredImages.has(slot.key));
-      const pages = [];
-      if (needsReview.length) {
+      const needsReview = slots.filter((slot) => links.get(slot.url) !== "working" || state.recoveredImages.has(slot.key));
+      const pages = pageIndex || [];
+      if (needsReview.length && !pageIndex) {
         for (let page = 1; page <= pdf.pages; page += 1) {
           signal.throwIfAborted();
           status.textContent = `Reading PDF text (page ${page} of ${pdf.pages})…`;
@@ -105,16 +161,24 @@
           try { text = await pdf.text(page, signal); } catch { signal.throwIfAborted(); }
           pages.push(indexPdfText(page, text));
         }
+        signal.throwIfAborted();
+        pageIndex = pages;
       }
       signal.throwIfAborted();
+      const altCounts = new Map();
+      for (const slot of slots) {
+        const alt = normalizeText(slot.alt);
+        altCounts.set(alt, (altCounts.get(alt) || 0) + 1);
+      }
       result = {
-        pdf, pages, slots: needsReview, source: state.source,
+        pdf, pages, altCounts, slots: needsReview, source: state.source,
+        hasPages: slots.some((slot) => slot.page !== null),
         working: slots.filter((slot) => links.get(slot.url) === "working").length,
         broken: slots.filter((slot) => links.get(slot.url) === "broken").length,
         unverified: slots.filter((slot) => links.get(slot.url) === "unverified").length,
         imagePages: new Map()
       };
-      renderResults(preferred);
+      renderResults(Math.max(0, needsReview.findIndex((slot) => slot.key === preferred)));
     } catch (error) {
       if (scan === job) status.textContent = signal.aborted ? "Scan canceled. Check image links again to restart." : `Could not check images. ${error.message}`;
     } finally {
@@ -167,16 +231,36 @@
   function renderResults(preferred) {
     const { slots, broken, working, unverified } = result;
     const summary = `${broken} broken · ${working} working`;
-    status.textContent = unverified ? `${summary} · ${unverified} timed out. Check links again to retry timeouts.` : summary;
+    status.textContent = unverified ? `${summary} · ${unverified} timed out and can be reviewed.` : summary;
     byId("recoveryReview").hidden = !slots.length;
-    list.replaceChildren(...slots.map((slot, index) => {
-      const name = slot.alt || slot.caption || `Image ${index + 1}`;
-      const location = slot.page ? `Markdown page ${slot.page}` : slot.entryTitle;
-      const tag = state.recoveredImages.has(slot.key) ? "Applied · " : skipped.has(slot.key) ? "Skipped · " : "";
-      return new Option(`${tag}${index + 1}. ${name} — ${location}`, slot.key);
+    const taken = takenFileNames();
+    result.fileNames = new Map(slots.map((slot, index) => {
+      const existing = state.recoveredImages.get(slot.key);
+      if (existing) return [slot.key, existing.fileName];
+      const fileName = [slot[naming], slot.h2, `image-${index + 1}`]
+        .map((title) => uniqueFileName(title || "", taken)).find(Boolean);
+      taken.add(fileName);
+      return [slot.key, fileName];
     }));
-    if (slots.some((slot) => slot.key === preferred)) list.value = preferred;
-    if (slots.length) reviewSlot();
+    if (slots.length) reviewSlot(preferred);
+  }
+
+  function sourcePage(slot) {
+    return result.hasPages ? slot.page : slot.entryIndex + 1;
+  }
+
+  function nextSourcePage(current) {
+    return Math.min(...result.slots.map(sourcePage).filter((page) => page > current));
+  }
+
+  function nextReviewIndex() {
+    const { slots } = result;
+    for (let offset = 1; offset < slots.length; offset += 1) {
+      const index = (reviewIndex + offset) % slots.length;
+      const { key } = slots[index];
+      if (!skipped.has(key) && !state.recoveredImages.has(key)) return index;
+    }
+    return reviewIndex;
   }
 
   function stopSelection() {
@@ -189,28 +273,49 @@
     if (draft) URL.revokeObjectURL(draft.url);
     draft = null;
     chosenImage.removeAttribute("src");
-    form.hidden = true;
+    chosenImage.hidden = true;
+    byId("applyRecovery").disabled = true;
   }
 
-  async function reviewSlot() {
-    stopSelection();
-    const slot = result.slots.find((candidate) => candidate.key === list.value);
+  async function reviewSlot(index) {
+    const slot = result?.slots[index];
     if (!slot) return;
-    const current = { slot, controller: new AbortController(), page: slot.page || 1 };
+    reviewIndex = index;
+    stopSelection();
+    const current = { slot, controller: new AbortController() };
     selection = current;
     const { signal } = current.controller;
     const applied = state.recoveredImages.get(slot.key);
-    const context = [slot.heading || slot.entryTitle, slot.caption || slot.before || slot.after].filter(Boolean);
-    byId("recoveryContext").textContent = context.join(" · ");
+    result.pdf.show((image) => {
+      if (selection !== current) return;
+      current.request = {};
+      showDraft(image);
+    }, () => { current.browsed = true; });
+    const position = sourcePage(slot);
+    const location = result.hasPages ? `Markdown page ${position}` : `Entry ${position}`;
+    const tag = applied ? " · Applied" : skipped.has(slot.key) ? " · Skipped" : "";
+    byId("recoveryPosition").textContent = `Image ${index + 1} of ${result.slots.length} · ${location}${tag}`;
+    byId("previousRecovery").disabled = index === 0;
+    byId("nextRecovery").disabled = index === result.slots.length - 1;
+    byId("nextRecoveryPage").disabled = !Number.isFinite(nextSourcePage(position));
+    byId("nextRecoveryPage").textContent = result.hasPages ? "Next Markdown page" : "Next entry";
+    pageNumber.value = position ?? "";
+    pageNumber.setCustomValidity("");
+    byId("recoveryPageLabel").textContent = result.hasPages ? "Markdown page" : "Entry number";
+    const context = [slot.entryTitle, slot.heading, slot.caption || slot.before || slot.after].filter(Boolean);
+    byId("recoveryContext").textContent = [...new Set(context)].join(" · ");
     byId("restoreRecovery").hidden = !applied;
     byId("skipRecovery").disabled = Boolean(applied);
-    if (applied) showDraft(applied, slot);
+    fileNameInput.value = result.fileNames.get(slot.key);
+    byId("recoveryCaption").value = applied?.caption ?? (slot.alt || slot.caption);
+    form.hidden = false;
+    if (applied) showDraft(applied);
     candidates.replaceChildren();
     confidence.textContent = "Looking for nearby PDF images…";
 
-    const anchors = imageAnchors(slot);
+    const anchors = imageAnchors(slot, result.altCounts.get(normalizeText(slot.alt)) === 1);
     const ranked = rankPages(result.pages, anchors, slot.page);
-    if (ranked.length) current.page = ranked[0].page.number;
+    result.pdf.focus(applied?.page || ranked[0]?.page.number || slot.page || 1);
     const found = [];
     try {
       for (const { page, score } of ranked.slice(0, 3)) {
@@ -235,17 +340,20 @@
   function renderCandidates(current, matches) {
     const [first, second] = matches;
     if (!first) {
-      confidence.textContent = "No embedded images found on the suggested pages. Browse the PDF or select a crop.";
+      confidence.textContent = "No embedded images found on the suggested pages. Use Select crop in the PDF pane.";
       return;
     }
-    current.page = first.page;
-    confidence.textContent = first.score < 5 || (second && first.score - second.score < 2)
+    const ambiguous = first.score < 5 || (second && first.score - second.score < 2);
+    const applied = state.recoveredImages.has(current.slot.key);
+    if (!current.request && !current.browsed && !applied) result.pdf.focus(first.page, first.bounds);
+    confidence.textContent = ambiguous
       ? "Several matches are possible or the text evidence is weak. Compare the images before choosing."
-      : "Suggestions are ranked using the surrounding Markdown and nearby PDF text.";
+      : "Review the highlighted match against the PDF.";
     candidates.replaceChildren(...matches.map((match) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
+      button.setAttribute("aria-pressed", "false");
       const thumb = document.createElement("img");
       thumb.src = match.thumbnail;
       thumb.alt = "";
@@ -254,16 +362,19 @@
       item.append(button);
       return item;
     }));
+    if (!ambiguous && !applied && !current.request && !current.browsed) chooseSuggestion(current, first, candidates.querySelector("button"));
   }
 
   async function chooseSuggestion(current, match, button) {
     const request = {};
     current.request = request;
+    result.pdf.focus(match.page, match.bounds);
+    for (const choice of candidates.querySelectorAll("button")) choice.setAttribute("aria-pressed", String(choice === button));
     button.disabled = true;
     try {
       const blob = await result.pdf.extract(match.page, match.index, current.controller.signal);
       if (selection === current && current.request === request) {
-        showDraft({ blob, page: match.page, label: `image-${match.index}` }, current.slot);
+        showDraft({ blob, page: match.page, label: `image-${match.index}` });
       }
     } catch (error) {
       if (selection === current && current.request === request) status.textContent = error.message;
@@ -272,44 +383,26 @@
     }
   }
 
-  function browsePdf() {
-    const current = selection;
-    current.request = null;
-    dialog.close();
-    result.pdf.pick(current.page, (image) => {
-      if (selection !== current) return;
-      dialog.showModal();
-      showDraft(image, current.slot);
-    }, () => {
-      if (selection === current) dialog.showModal();
-    });
-  }
-
-  function showDraft(image, slot) {
+  function showDraft(image) {
     clearDraft();
     draft = { ...image, url: URL.createObjectURL(image.blob) };
-    const name = suggestedName(slot) || `page-${image.page}-${image.label}`;
-    const existing = state.recoveredImages.get(slot.key);
-    byId("recoveryFileName").value = image.fileName || existing?.fileName || uniqueFileName(name, slot.key);
-    byId("recoveryCaption").value = image.caption ?? existing?.caption ?? (slot.alt || slot.caption);
     chosenImage.src = draft.url;
-    form.hidden = false;
+    chosenImage.hidden = false;
+    byId("applyRecovery").disabled = false;
   }
 
-  function suggestedName(slot) {
-    const generic = /^(?:(?:the )?(?:art(?:work)?|image|illustration|picture|photo|figure|portrait)(?: \d+)?)$/i;
-    const name = [slot.alt, slot.caption].find((text) => text && !generic.test(text.trim())) || "";
-    return name.replace(/^\s*(?:fig(?:ure)?\.?|caption)\s*(?:\d+\s*)?[:.\-–—]?\s+/i, "");
+  function takenFileNames(except) {
+    const taken = new Set([...state.recoveredImages].filter(([id]) => id !== except).map(([, image]) => image.fileName.toLowerCase()));
+    for (const path of window.bookArchive.reservedImagePaths(state.bookPackage.assets)) taken.add(path.slice("images/".length));
+    return taken;
   }
 
-  function uniqueFileName(value, key) {
+  function uniqueFileName(value, taken) {
     const normalized = value.normalize("NFKC").trim().replace(/\.(?:png|jpe?g|webp|gif|svg|bmp|tiff?)$/i, "")
       .toLowerCase().replace(/[^\p{L}\p{N}\p{M}_-]+/gu, "-").replace(/^[-_]+|[-_]+$/g, "");
     const base = [...normalized].slice(0, 80).join("");
     if (!/[\p{L}\p{N}]/u.test(base)) return "";
     const stem = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base) ? `image-${base}` : base;
-    const taken = new Set([...state.recoveredImages].filter(([id]) => id !== key).map(([, image]) => image.fileName.toLowerCase()));
-    for (const path of window.bookArchive.reservedImagePaths(state.bookPackage.assets)) taken.add(path.slice("images/".length));
     let fileName = `${stem}.png`;
     for (let suffix = 2; taken.has(fileName); suffix += 1) fileName = `${stem}-${suffix}.png`;
     return fileName;
@@ -325,12 +418,12 @@
     return { text: ` ${text} `, words: new Set(text.split(" ")) };
   }
 
-  function imageAnchors(slot) {
+  function imageAnchors(slot, uniqueAlt) {
     const ignored = new Set("figure caption illustration artwork picture image photo portrait the and for from with into that this was were are have has".split(" "));
     const anchors = [];
     const seen = new Set();
     for (const [value, weight] of [
-      [slot.caption, 6], [slot.alt, 5], [slot.heading, 3], [slot.before, 2], [slot.after, 2]
+      [slot.caption, 6], [uniqueAlt ? slot.alt : "", 2], [slot.heading, 3], [slot.before, 2], [slot.after, 2]
     ]) {
       const phrase = normalizeText(value);
       if (!phrase || seen.has(phrase)) continue;
@@ -370,7 +463,7 @@
     const [left, bottom, right, top] = content?.view || [0, 0, 612, 792];
     return {
       number, area: (right - left) * (top - bottom), index: textIndex(lines.map((line) => line.text).join(" ")),
-      lines: lines.map((line) => ({ bounds: line.bounds, index: textIndex(line.text) }))
+      lines: lines.map((line) => ({ text: line.text, bounds: line.bounds, index: textIndex(line.text) }))
     };
   }
 
@@ -394,4 +487,5 @@
     const penalty = area / page.area > 0.55 ? 6 : area < 256 ? 3 : 0;
     return 2 * nearby - penalty;
   }
+
 })();

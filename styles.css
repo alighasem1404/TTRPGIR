@@ -91,6 +91,7 @@ button { cursor: pointer; }
 .pdf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 .pdf-toolbar h2 { flex: 1; margin: 0; color: var(--wine-dark); font: 24px Georgia, serif; }
 #pdfPageNumber { width: 70px; }
+.pdf-page-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .pdf-page-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 15px; }
 .pdf-page-layout[hidden] { display: none; }
 #pdfPreviewStage { position: relative; }
@@ -102,18 +103,41 @@ button { cursor: pointer; }
 #pdfImages button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: start; }
 #pdfImages img { width: 52px; height: 42px; object-fit: contain; background: white; }
 #pdfImages .pdf-use-image { display: none; }
-#pdfInspector[data-picking] #pdfImages .pdf-use-image { display: block; margin-top: 4px; }
+#pdfReviewPane[data-picking] #pdfImages .pdf-use-image { display: block; margin-top: 4px; }
+#pdfImageHighlight { position: absolute; outline: 3px solid #b68a3d; box-shadow: 0 0 0 2px white; pointer-events: none; }
+#pdfPageCanvas.selecting-crop + #pdfImageHighlight { visibility: hidden; }
 #pdfPageText { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-#imageRecovery { width: min(740px, calc(100% - 24px)); }
-.recovery-field { display: grid; gap: 5px; min-width: 0; }
-.recovery-field select, .recovery-field input { width: 100%; }
-#recoveryContext { overflow-wrap: anywhere; }
-#recoveryCandidates { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 8px; margin: 10px 0; padding: 0; list-style: none; }
+#imageRecovery { width: min(1050px, calc(100% - 24px)); padding: 12px; font-size: 13px; }
+#imageRecovery:has(#recoverySetup:not([hidden])) { width: min(480px, calc(100% - 24px)); }
+#imageRecovery [hidden] { display: none; }
+#imageRecovery .pdf-toolbar { gap: 6px; margin-bottom: 6px; }
+#imageRecovery button, #imageRecovery input:not([type="radio"]) { padding: 4px 7px; }
+#recoverySetup fieldset { display: grid; gap: 7px; margin: 8px 0 12px; border: 1px solid var(--line); }
+#recoveryStatus { flex: 1; margin: 0; }
+.recovery-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; }
+#recoveryPdfPane, #recoveryReview { min-width: 0; max-height: min(76vh, calc(100dvh - 120px)); overflow: auto; padding: 6px; }
+#recoveryPdfPane { border: 1px solid var(--line); border-radius: 5px; }
+#recoveryPdfPane .pdf-page-layout:not([hidden]) { display: block; }
+#recoveryPdfPane #pdfPreviewStage { width: min(100%, calc(clamp(130px, 100dvh - 260px, 540px) * var(--pdf-page-ratio, 1))); margin: 0 auto; }
+#recoveryPdfPane #pdfImages { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+@media (max-width: 760px) {
+  .recovery-layout { grid-template-columns: minmax(0, 1fr); }
+  #recoveryPdfPane { max-height: none; }
+  #recoveryPdfPane #pdfPreviewStage { width: min(100%, calc(clamp(125px, 33dvh, 290px) * var(--pdf-page-ratio, 1))); }
+  #recoveryReview { max-height: none; }
+}
+.recovery-field { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 5px 8px; min-width: 0; }
+.recovery-field input { width: 100%; min-width: 0; }
+#recoveryPageNumber { width: 64px; }
+#recoveryContext { margin: 6px 0; overflow-wrap: anywhere; }
+#recoveryCandidates { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 5px; margin: 6px 0; padding: 0; list-style: none; }
 #recoveryCandidates button { display: grid; justify-items: center; gap: 5px; width: 100%; }
-#recoveryCandidates img { width: 100%; height: 72px; object-fit: contain; }
-#recoveryForm { padding: 10px; border: 1px solid var(--gold-dark); border-radius: 5px; }
-#recoveryChosenImage { display: block; max-width: 100%; max-height: 180px; margin: 0 auto 8px; object-fit: contain; }
-#recoveryForm button { margin-top: 8px; color: #fff3db; background: var(--wine-dark); }
+#recoveryCandidates button[aria-pressed="true"] { outline: 2px solid var(--wine); outline-offset: -2px; }
+#recoveryCandidates img { width: 100%; height: 46px; object-fit: contain; }
+#recoveryForm { padding: 7px; border: 1px solid var(--gold-dark); border-radius: 5px; }
+#recoveryChosenImage { display: block; max-width: 100%; max-height: 78px; margin: 6px auto 0; object-fit: contain; }
+#recoveryForm .pdf-toolbar { margin: 6px 0 0; }
+#applyRecovery { color: #fff3db; background: var(--wine-dark); }
 #bookZipExport { width: min(450px, calc(100% - 24px)); }
 #bookZipExport h2 { margin: 0; color: var(--wine-dark); font: 24px Georgia, serif; }
 #bookZipExportStatus { overflow-wrap: anywhere; }

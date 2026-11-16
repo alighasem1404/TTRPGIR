@@ -65,7 +65,8 @@ async function smoke(width) {
     }
 
     await maker.upload("mdInput", "local-source-smoke.md",
-      "## At the Harbor\n![Harbor Lantern](missing-smoke-lantern.png)\nFigure 1 Harbor Lantern\n" +
+      "## At the Harbor\r\n![Books Image](missing-smoke-lantern.png) {position:absolute,bottom:-4%,width:100%,height:}\r\nFigure 1 Harbor Lantern\r\n### Sample\r\n" +
+      "\\page\r\n![Books Image](missing-smoke-lantern.png){width:100%}\r\nFigure 1 Harbor Lantern\r\n" +
       "# Interlude\n### Backstory\n### Backstory ###\n#### Backstory\n##### Notes\n###### Details");
     await maker.until(() => state.source.includes("# At the Harbor"), "Local Markdown import");
     const headings = await maker.evaluate(() => {
@@ -100,17 +101,60 @@ async function smoke(width) {
     assert.deepEqual(headings.extras, ["H5", "H6"]);
     assert.deepEqual(headings.edits, ["#### Origins", "#### Origins ###", "#### Backstory", "##### Notes", "###### Details"]);
     await maker.upload("pdfInput", "local-source-smoke.pdf", [...fixturePdf()]);
-    await maker.until(() => !document.getElementById("pdfPageBody").hidden &&
-      document.querySelector("#pdfImages button"), "PDF.js page and embedded image");
+    await maker.until(() => document.getElementById("imageRecovery").open &&
+      !document.getElementById("recoverySetup").hidden, "Book-wide filename choice");
+    await maker.evaluate(() => document.getElementById("recoverySetup").requestSubmit());
+    await maker.until(() => !document.getElementById("applyRecovery").disabled, "Strong match prefilled");
+    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "lantern-at-the-harbor.png");
     await maker.evaluate(() => {
-      document.getElementById("pdfInspector").close();
-      document.getElementById("openImageRecovery").click();
+      document.getElementById("recoveryPageNumber").value = 2;
+      document.getElementById("jumpRecoveryPage").requestSubmit();
     });
-    await maker.until(() => document.querySelector("#recoveryCandidates button"), "Image suggestion");
-    await maker.evaluate(() => document.querySelector("#recoveryCandidates button").click());
-    await maker.until(() => !document.getElementById("recoveryForm").hidden, "Image extracted for review");
+    await maker.until(() => document.getElementById("recoveryPosition").textContent.includes("Markdown page 2"), "Jump to Markdown page");
+    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "lantern-at-the-harbor-2.png");
+    await maker.evaluate(() => document.getElementById("previousRecovery").click());
+    await maker.evaluate(() => document.getElementById("nextRecoveryPage").click());
+    assert.match(await maker.evaluate(() => document.getElementById("recoveryPosition").textContent), /Markdown page 2/);
+    await maker.evaluate(() => document.getElementById("previousRecovery").click());
+    await maker.until(() => !document.getElementById("pdfImageHighlight").hidden, "PDF pane and highlighted match");
+    await maker.evaluate(() => document.getElementById("pdfNext").click());
+    await maker.until(() => document.getElementById("pdfPageNumber").value === "2" &&
+      !document.getElementById("pdfPageBody").hidden, "Next PDF page");
     await maker.evaluate(() => {
-      document.getElementById("recoveryFileName").value = "harbor-lantern";
+      document.getElementById("pdfPageNumber").value = 1;
+      document.getElementById("jumpPdfPage").requestSubmit();
+    });
+    await maker.until(() => document.getElementById("pdfPageNumber").value === "1" &&
+      !document.getElementById("pdfPageBody").hidden, "Jump to PDF page");
+    const canvasHeight = await maker.evaluate(() => document.getElementById("pdfPageCanvas").getBoundingClientRect().height);
+    assert.ok(canvasHeight > 0 && canvasHeight <= (width === 440 ? 291 : 541), "PDF page fits at review scale");
+
+    await maker.upload("pdfInput", "local-source-smoke.pdf", [...fixturePdf()]);
+    await maker.until(() => document.getElementById("imageRecovery").open && !document.getElementById("recoverySetup").hidden, "Replacement PDF asks for naming");
+    await maker.evaluate(() => {
+      document.querySelector('[name="recoveryNaming"][value="h3"]').checked = true;
+      document.getElementById("recoverySetup").requestSubmit();
+    });
+    await maker.until(() => !document.getElementById("applyRecovery").disabled, "Nearest H3 match ready");
+    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "sample.png");
+    await maker.evaluate(() => {
+      document.getElementById("recoveryCaption").value = "Harbor Lantern";
+      document.getElementById("recoveryForm").requestSubmit();
+    });
+    await maker.until(() => document.getElementById("recoveryPosition").textContent.includes("Image 2 of 2") &&
+      document.getElementById("recoveryFileName").value === "sample-2.png" &&
+      !document.getElementById("applyRecovery").disabled, "Next image and unique filename");
+    await maker.evaluate(() => document.getElementById("viewRecoveredPreview").click());
+    await maker.until(() => {
+      const recovered = document.querySelector("#pageViewport [data-recovered-block]");
+      return !document.getElementById("imageRecovery").open && recovered?.naturalWidth === 16 &&
+        recovered.alt === "Harbor Lantern" && document.activeElement === recovered &&
+        !document.getElementById("pageViewport").textContent.includes("position:absolute");
+    }, "Preview renders the recovered Homebrewery image and omits positioning markup");
+    await maker.evaluate(() => document.getElementById("openImageRecovery").click());
+    await maker.until(() => !document.getElementById("applyRecovery").disabled &&
+      document.getElementById("recoveryFileName").value === "sample-2.png", "Naming persists on reopen");
+    await maker.evaluate(() => {
       document.getElementById("recoveryForm").requestSubmit();
       document.getElementById("imageRecovery").close();
       document.getElementById("exportButton").click();
@@ -129,10 +173,10 @@ async function smoke(width) {
     await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader demo");
     await reader.upload("jsonInput", "lantern-smoke.zip", zip);
     await reader.until(() => {
-      const image = document.querySelector(".page-content img[src^='blob:']");
-      return image?.naturalWidth === 16 && image.alt === "Harbor Lantern" &&
+      const images = [...document.querySelectorAll(".page-content img[src^='blob:']")];
+      return images.length === 2 && images.every((image) => image.naturalWidth === 16) && images[0].alt === "Harbor Lantern" &&
         document.getElementById("currentLabel").textContent === "Lantern at the Harbor";
-    }, "Reader renders the recovered image");
+    }, "Reader renders both recovered images");
     for (const request of maker.requests) {
       assert.ok(["GET", "HEAD"].includes(request.method) && !request.hasPostData, "No file upload request");
       assert.doesNotMatch(request.url, /local-source-smoke/);
@@ -235,11 +279,13 @@ function fixturePdf() {
   ]);
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Pages /Count 2 /Kids [3 0 R 7 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /Art 4 0 R >> /Font << /F1 5 0 R >> >> /Contents 6 0 R >>",
     stream(Buffer.alloc(16 * 16 * 3, 95), "/Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceRGB /BitsPerComponent 8"),
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    stream("q 80 0 0 80 40 40 cm /Art Do Q\nBT /F1 12 Tf 40 24 Td (Figure 1 Harbor Lantern) Tj ET")
+    stream("q 80 0 0 80 40 40 cm /Art Do Q\nBT /F1 12 Tf 40 24 Td (Figure 1 Harbor Lantern) Tj ET"),
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 520] /Resources << /Font << /F1 5 0 R >> >> /Contents 8 0 R >>",
+    stream("BT /F1 12 Tf 40 24 Td (Interlude) Tj ET")
   ];
   const parts = [Buffer.from("%PDF-1.4\n")];
   const offsets = ["0000000000 65535 f \n"];

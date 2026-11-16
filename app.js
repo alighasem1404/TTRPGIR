@@ -342,8 +342,8 @@ function parseDocument(source, config = {}) {
   const pageBreaks = (body.match(/\\page\b/g) || []).length;
   const entries = buildEntries(body, config);
   const allBody = body.replace(/\\page\b/g, "\n");
-  const imageMatches = [...allBody.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
-  const keptImages = imageMatches.filter((match) => !shouldIgnoreImage(match[1], match[2], config)).length;
+  const keptImages = allBody.split(/\r?\n/).map(parseMarkdownImage)
+    .filter((image) => image && !shouldIgnoreImage(image.alt, image.url, config)).length;
   return { metadata, css, entries, pageBreaks, images: keptImages, tables: (allBody.match(/\{\{fancyTable\b/gi) || []).length, directives: (allBody.match(/\{\{[^\n}]*/g) || []).length };
 }
 
@@ -492,30 +492,56 @@ function getAssetId(alt, url, assets) {
 }
 
 function parseMarkdownImage(line) {
-  const match = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?$/);
-  return match ? { alt: match[1], url: match[2] } : null;
+  const match = line.trim().match(/^!\[([^\]]*)\]\(\s*(<[^>]+>|(?:[^()]|\([^()]*\))+?)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)(?:\s*\{[^}]*\})*$/);
+  const url = match?.[2].trim().replace(/^<|>$/g, "");
+  return url ? { alt: match[1], url } : null;
 }
 
 function refreshImageSlots() {
   const contexts = new Map();
   const body = state.source.slice(markdownHeader(state.source).end);
-  const lines = body.replace(/\\page\b/g, "\n\\page\n").split(/\r?\n/);
+  const source = body.replace(/\\page\b/g, "\n\\page\n");
+  const lines = source.split("\n");
+  const headings = new Map(findMarkdownHeadings(source).map((item) => [item.index, item]));
+  let offset = 0;
+  const lineHeadings = lines.map((line) => {
+    const heading = headings.get(offset);
+    offset += line.length + 1;
+    return heading;
+  });
+  const followingH3 = [];
+  let nextH3;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const title = lineHeadings[index];
+    if (title?.level <= 2) nextH3 = null;
+    if (title?.level === 3) nextH3 = { index, title: stripMarkup(title.title) };
+    followingH3[index] = nextH3;
+  }
   const hasPages = lines.includes("\\page");
   let page = 1;
   let heading = "";
+  let h2 = "";
+  let previousH3;
   lines.forEach((line, index) => {
     if (line === "\\page") page += 1;
-    const title = parseHeadingLine(line.trim());
+    const title = lineHeadings[index];
     if (title) heading = stripMarkup(title.title);
+    if (title?.level <= 2) {
+      h2 = title.level === 2 ? heading : "";
+      previousH3 = null;
+    }
+    if (title?.level === 3) previousH3 = { index, title: heading };
     const image = parseMarkdownImage(line);
     if (!image) return;
+    const next = followingH3[index];
+    const nearestH3 = next && (!previousH3 || next.index - index < index - previousH3.index) ? next : previousH3;
     const pair = JSON.stringify([image.alt, image.url]);
     if (!contexts.has(pair)) contexts.set(pair, []);
     const before = nearbyImageText(lines, index, -1);
     const after = nearbyImageText(lines, index, 1);
     const caption = [after, before].find((text) => /^(?:(?:fig(?:ure)?\.?|caption)\s|\*[^*]+\*$|_[^_]+_$)/i.test(text));
     contexts.get(pair).push({
-      page: hasPages ? page : null, heading, before: stripMarkup(before), after: stripMarkup(after),
+      page: hasPages ? page : null, heading, h2, h3: nearestH3?.title || "", before: stripMarkup(before), after: stripMarkup(after),
       caption: caption ? stripMarkup(caption) : ""
     });
   });
@@ -524,7 +550,7 @@ function refreshImageSlots() {
   state.previewImages = new WeakMap();
   const occurrences = new Map();
   state.entries.forEach((entry, entryIndex) => {
-    entry.blocks.forEach((block) => {
+    entry.blocks.forEach((block, blockIndex) => {
       const image = block[markdownImage];
       if (!image) return;
       const pair = JSON.stringify([image.alt, image.url]);
@@ -532,7 +558,7 @@ function refreshImageSlots() {
       occurrences.set(pair, occurrence + 1);
       const key = JSON.stringify([image.alt, image.url, occurrence]);
       const context = contexts.get(pair)?.[occurrence] || { page: null, heading: entry.title, before: "", after: "", caption: "" };
-      state.imageSlots.push({ ...image, ...context, key, entryIndex, entryTitle: entry.title });
+      state.imageSlots.push({ ...image, ...context, key, entryIndex, blockIndex, entryTitle: entry.title });
       const recovery = state.recoveredImages.get(key);
       if (recovery) state.previewImages.set(block, recovery);
     });
@@ -549,14 +575,36 @@ function nearbyImageText(lines, start, direction) {
 }
 
 function updateImageRecovery(slot, image) {
+  const block = state.entries[slot.entryIndex].blocks[slot.blockIndex];
   const previous = state.recoveredImages.get(slot.key);
+  if (image) {
+    const recovery = { ...image, url: URL.createObjectURL(image.blob) };
+    state.recoveredImages.set(slot.key, recovery);
+    state.previewImages.set(block, recovery);
+  } else {
+    state.recoveredImages.delete(slot.key);
+    state.previewImages.delete(block);
+  }
   if (previous) URL.revokeObjectURL(previous.url);
-  if (image) state.recoveredImages.set(slot.key, { ...image, url: URL.createObjectURL(image.blob) });
-  else state.recoveredImages.delete(slot.key);
-  refreshImageSlots();
   updateExportLabel();
   state.currentPage = slot.entryIndex;
   renderPage();
+}
+
+function showRecoveredImage(slot) {
+  const current = state.imageSlots.find(({ key }) => key === slot.key);
+  if (!current) return;
+  if (state.currentPage !== current.entryIndex) {
+    state.currentPage = current.entryIndex;
+    renderPage();
+  }
+  const image = $(`#pageViewport [data-recovered-block="${current.blockIndex}"]`);
+  image?.decode().catch(() => {}).then(() => {
+    if (image.isConnected) {
+      image.focus({ preventScroll: true });
+      image.scrollIntoView({ block: "center" });
+    }
+  });
 }
 
 function imageRole(alt) {
@@ -640,7 +688,8 @@ function renderPackageBlock(block, assets, entryIndex, blockIndex) {
     const customClass = block.className ? ` ${block.className.replace(/[^a-z0-9_-]/gi, "")}` : "";
     const className = `${semanticClass}${placementClass}${customClass}`;
     const width = block.width ? ` style="width:${escapeAttribute(block.width)}"` : "";
-    return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(asset.alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(asset.alt)}" data-image-viewer tabindex="0" loading="lazy"></span><figcaption>${inlineMarkdown(asset.alt)}</figcaption></figure>`;
+    const loading = recovery ? `data-recovered-block="${blockIndex}" loading="eager"` : 'loading="lazy"';
+    return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(asset.alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(asset.alt)}" data-image-viewer tabindex="0" ${loading}></span><figcaption>${inlineMarkdown(asset.alt)}</figcaption></figure>`;
   }
   if (block.type === "embed" && block.kind === "video-grid") return `<section><h3>${inlineMarkdown(block.title)}</h3><div class="video-grid">${block.items.map((item, index) => `<a class="video-card" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer"><span class="image-frame image-frame--wide"><img src="${escapeAttribute(item.thumbnail)}" alt="${escapeAttribute(block.title)} video ${index + 1}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(block.title)} video ${index + 1}" data-image-viewer tabindex="0" loading="lazy"></span><span class="video-card-caption">Watch ${escapeHtml(block.title)} video ${index + 1} ↗</span></a>`).join("")}</div></section>`;
   return "";
