@@ -9,10 +9,18 @@ const state = {
   currentPage: 0,
   search: "",
   sourceTheme: null,
-  paletteMode: "source"
+  paletteMode: "source",
+  headingHistory: [],
+  imageSlots: [],
+  recoveredImages: new Map(),
+  previewImages: new WeakMap()
 };
 
 const $ = (selector) => document.querySelector(selector);
+const markdownImage = Symbol("markdownImage");
+let headingDraft;
+let importVersion = 0;
+let zipExport;
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#previousButton").addEventListener("click", () => goToPage(state.currentPage - 1));
@@ -23,7 +31,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#mdInput").addEventListener("change", loadSelectedMarkdown);
   $("#jsonInput").addEventListener("change", loadSelectedJson);
-  $("#exportButton").addEventListener("click", exportBookJson);
+  $("#exportButton").addEventListener("click", exportBook);
+  $("#downloadBookZip").addEventListener("click", downloadBookZip);
+  $("#bookZipExport").addEventListener("close", (event) => {
+    if (!event.target.open) zipExport = null;
+  });
+  $("#openHeadings").addEventListener("click", openHeadingEditor);
+  $("#undoHeadings").addEventListener("click", undoHeadingEdit);
+  $("#headingSearch").addEventListener("input", filterHeadingRows);
+  $("#headingRows").addEventListener("input", updateHeadingControls);
+  $("#selectHeadings").addEventListener("change", selectVisibleHeadings);
+  $("#updateSelectedHeadings").addEventListener("click", updateSelectedHeadingLevels);
+  $("#previewHeadings").addEventListener("click", previewHeadingChanges);
+  $("#backToHeadingEdit").addEventListener("click", () => showHeadingPreview(false));
+  $("#applyHeadings").addEventListener("click", applyHeadingChanges);
+  $("#headingEditor").addEventListener("close", (event) => {
+    if (!event.target.open) headingDraft = null;
+  });
   $("#themePreset")?.addEventListener("change", applySelectedTheme);
   $("#paletteColorControls")?.addEventListener("input", handlePaletteInput);
   $("#paletteColorControls")?.addEventListener("change", handleInvalidPaletteValue);
@@ -36,11 +60,14 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function loadSource() {
+  const version = ++importVersion;
   try {
     const [sourceResponse, configResponse] = await Promise.all([fetch(SOURCE_PATH, { cache: "no-cache" }), fetch(CONFIG_PATH, { cache: "no-cache" })]);
     if (!sourceResponse.ok || !configResponse.ok) throw new Error("Could not load the demo source or its conversion profile.");
-    loadDocument(await sourceResponse.text(), "Euphoria Demo.txt", await configResponse.json());
+    const [source, config] = await Promise.all([sourceResponse.text(), configResponse.json()]);
+    if (version === importVersion) loadDocument(source, "Euphoria Demo.txt", config);
   } catch (error) {
+    if (version !== importVersion) return;
     setStatus("Import a Markdown file to begin");
     showNotice("The demo source could not be loaded automatically. Choose the Markdown file with Import Markdown.");
   }
@@ -49,9 +76,12 @@ async function loadSource() {
 function loadSelectedMarkdown(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  const version = ++importVersion;
   const reader = new FileReader();
   const config = file.name.toLowerCase() === "euphoria demo.txt" ? state.config : standardConversionConfig();
-  reader.addEventListener("load", () => loadDocument(String(reader.result), file.name, config));
+  reader.addEventListener("load", () => {
+    if (version === importVersion) loadDocument(String(reader.result), file.name, config);
+  });
   reader.readAsText(file);
 }
 
@@ -71,8 +101,10 @@ function standardConversionConfig() {
 function loadSelectedJson(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  const version = ++importVersion;
   const reader = new FileReader();
   reader.addEventListener("load", () => {
+    if (version !== importVersion) return;
     try {
       const bookPackage = JSON.parse(String(reader.result));
       validateBookPackage(bookPackage);
@@ -95,10 +127,19 @@ function loadDocument(source, fileName, config = {}) {
 }
 
 function loadPackage(bookPackage, fileName, source = "", config = {}) {
+  if ($("#headingEditor").open) $("#headingEditor").close();
+  if ($("#bookZipExport").open) $("#bookZipExport").close();
+  window.bookmakerPdf?.setMarkdownAvailable(Boolean(source));
+  for (const image of state.recoveredImages.values()) URL.revokeObjectURL(image.url);
+  state.recoveredImages.clear();
+  state.headingHistory.length = 0;
+  $("#openHeadings").disabled = !findMarkdownHeadings(source, markdownHeader(source).end).length;
+  $("#undoHeadings").disabled = true;
   state.bookPackage = bookPackage;
   state.entries = bookPackage.entries || [];
   state.source = source;
   state.config = config;
+  refreshImageSlots();
   if (!state.sourceTheme) state.sourceTheme = bookPackage.theme;
   state.currentPage = 0;
   applyPackageMeta(bookPackage);
@@ -106,27 +147,241 @@ function loadPackage(bookPackage, fileName, source = "", config = {}) {
   renderPage();
   setStatus(`Loaded ${fileName}`);
   $("#exportButton").disabled = false;
+  updateExportLabel();
+}
+
+function openHeadingEditor() {
+  const headings = findMarkdownHeadings(state.source, markdownHeader(state.source).end);
+  const levels = [1, 2, 3, 4, 5, 6];
+  const byLevel = levels.map(() => new Map());
+  headings.forEach(({ level, title }, index) => {
+    const titles = byLevel[level - 1];
+    if (!titles.has(title)) titles.set(title, []);
+    titles.get(title).push(index);
+  });
+  const groups = byLevel.flatMap((titles) => [...titles.values()].map((indices) => ({ indices, original: headings[indices[0]] })));
+  const options = levels.map((level) => `<option value="${level}">H${level}</option>`).join("");
+  const columns = levels.map((level) => {
+    const rows = groups.map((group, index) => {
+      if (group.original.level !== level) return "";
+      const name = escapeAttribute(group.original.title);
+      const count = group.indices.length;
+      const description = `${count} occurrence${count === 1 ? "" : "s"}`;
+      return `<li class="heading-row" data-group="${index}">
+        <input type="checkbox" aria-label="Select H${level} ${name}" />
+        <input type="text" dir="auto" aria-label="Title for H${level} ${name}" aria-describedby="heading-count-${index}" value="${name}" title="${name}" />
+        <span class="heading-count" id="heading-count-${index}" aria-label="${description}" title="${description}">${count}</span>
+        <select aria-label="Level for H${level} ${name}">${options}</select>
+      </li>`;
+    }).join("");
+    if (!rows && level > 4) return "";
+    return `<section class="heading-column" aria-labelledby="heading-level-${level}">
+      <h3 id="heading-level-${level}">H${level}</h3>
+      <ul class="heading-rows">${rows}</ul>
+      <p class="heading-hint heading-column-empty"${rows ? " hidden" : ""}>No headings</p>
+    </section>`;
+  });
+  $("#headingRows").innerHTML = `<div class="heading-grid">${columns.slice(0, 4).join("")}</div>
+    <div class="heading-grid heading-grid-extra">${columns.slice(4).join("")}</div>`;
+  const board = $("#headingRows");
+  const columnSections = [...board.querySelectorAll(".heading-column")];
+  for (const row of board.querySelectorAll(".heading-row")) {
+    const group = groups[Number(row.dataset.group)];
+    const [selected, title, , level] = row.children;
+    level.value = group.original.level;
+    Object.assign(group, { row, selected, title, level });
+  }
+  headingDraft = { headings, groups, columnSections, preview: null };
+  $("#headingEntryHint").textContent = `H${entryHeadingLevel(state.config)} headings start new entries. Bulk shifts stop at H1 and H6.`;
+  $("#headingSearch").value = "";
+  $("#headingMessage").textContent = "";
+  showHeadingPreview(false);
+  filterHeadingRows();
+  $("#headingEditor").showModal();
+}
+
+function filterHeadingRows() {
+  const query = $("#headingSearch").value.trim().toLowerCase();
+  let visible = 0;
+  for (const { row, title } of headingDraft.groups) {
+    row.hidden = !title.value.toLowerCase().includes(query);
+    if (!row.hidden) visible += 1;
+  }
+  for (const column of headingDraft.columnSections) {
+    column.querySelector(".heading-column-empty").hidden = Boolean(column.querySelector(".heading-row:not([hidden])"));
+  }
+  $("#headingEmpty").hidden = visible > 0;
+  updateHeadingControls();
+}
+
+function updateHeadingControls() {
+  const { groups } = headingDraft;
+  const selected = groups.filter(({ selected }) => selected.checked);
+  const visible = groups.filter(({ row }) => !row.hidden);
+  const selectedVisible = visible.filter(({ selected }) => selected.checked).length;
+  const selectAll = $("#selectHeadings");
+  selectAll.disabled = !visible.length;
+  selectAll.checked = visible.length > 0 && selectedVisible === visible.length;
+  selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
+  const occurrences = selected.reduce((count, group) => count + group.indices.length, 0);
+  $("#headingSelection").textContent = `${selected.length} selected · ${occurrences} heading${occurrences === 1 ? "" : "s"}`;
+  $("#updateSelectedHeadings").disabled = !selected.length;
+  $("#previewHeadings").disabled = !groups.some(({ title, level, original }) =>
+    title.value.trim() !== original.title || Number(level.value) !== original.level);
+}
+
+function selectVisibleHeadings() {
+  for (const { row, selected } of headingDraft.groups) {
+    if (!row.hidden) selected.checked = $("#selectHeadings").checked;
+  }
+  updateHeadingControls();
+}
+
+function updateSelectedHeadingLevels() {
+  const operation = $("#headingBulkOperation").value;
+  for (const { selected, level } of headingDraft.groups) {
+    if (!selected.checked) continue;
+    if (operation === "up") level.value = Math.max(1, Number(level.value) - 1);
+    else if (operation === "down") level.value = Math.min(6, Number(level.value) + 1);
+    else level.value = operation;
+  }
+  updateHeadingControls();
+}
+
+function previewHeadingChanges() {
+  const { headings, groups } = headingDraft;
+  const empty = groups.find(({ title }) => !title.value.trim());
+  if (empty) {
+    $("#headingSearch").value = "";
+    filterHeadingRows();
+    $("#headingMessage").textContent = "Enter a title for every heading before previewing.";
+    empty.title.focus();
+    return;
+  }
+
+  const edits = [];
+  for (const group of groups) {
+    const edit = { title: group.title.value.trim(), level: Number(group.level.value) };
+    for (const index of group.indices) edits[index] = edit;
+  }
+  let source = state.source;
+  let changed = 0;
+  for (let index = headings.length - 1; index >= 0; index -= 1) {
+    const heading = headings[index];
+    const { title, level } = edits[index];
+    if (title === heading.title && level === heading.level) continue;
+    const replacement = `${heading.indent}${"#".repeat(level)}${heading.space}${title}${heading.suffix}`;
+    source = source.slice(0, heading.index) + replacement + source.slice(heading.index + heading.length);
+    changed += 1;
+  }
+  const bookPackage = buildHeadingPackage(source);
+  headingDraft.preview = { source, bookPackage };
+  const entryCount = bookPackage.entries.length;
+  $("#headingPreviewSummary").textContent = `${changed} heading changes. Entries before and after: ${state.entries.length} → ${entryCount}.`;
+  $("#headingPreviewContents").innerHTML = bookPackage.entries.map((entry) => {
+    const sections = entry.blocks.filter((block) => block.type === "heading" && block.level === 3);
+    const list = sections.map((block) => `<li>${escapeHtml(block.text)}</li>`).join("");
+    return `<li><strong>${escapeHtml(entry.title)}</strong>${list ? `<ul>${list}</ul>` : ""}</li>`;
+  }).join("");
+  showHeadingPreview(true);
+}
+
+function showHeadingPreview(show) {
+  $("#headingEditView").hidden = show;
+  $("#headingPreviewView").hidden = !show;
+  (show ? $("#headingPreviewTitle") : $("#headingSearch")).focus();
+}
+
+function buildHeadingPackage(source) {
+  return buildBookPackage(source, state.bookPackage.source.fileName, parseDocument(source, state.config), state.config);
+}
+
+function applyHeadingChanges() {
+  if (!headingDraft.preview) return;
+  const { source, bookPackage } = headingDraft.preview;
+  state.headingHistory.push(state.source);
+  $("#headingEditor").close();
+  updateBookWithHeadings(source, bookPackage);
+  showNotice("Heading changes applied.");
+}
+
+function undoHeadingEdit() {
+  const source = state.headingHistory.pop();
+  if (source === undefined) return;
+  updateBookWithHeadings(source, buildHeadingPackage(source));
+  showNotice("Heading change undone.");
+}
+
+function updateBookWithHeadings(source, bookPackage) {
+  bookPackage.theme = state.bookPackage.theme;
+  state.source = source;
+  state.bookPackage = bookPackage;
+  state.entries = bookPackage.entries;
+  refreshImageSlots();
+  state.currentPage = Math.min(state.currentPage, state.entries.length - 1);
+  $("#undoHeadings").disabled = !state.headingHistory.length;
+  applyPackageMeta(bookPackage);
+  renderPage();
+}
+
+function markdownHeader(source) {
+  let end = 0;
+  const header = {};
+  for (let index = 0; index < 2; index += 1) {
+    const block = source.slice(end).match(/^\s*```(metadata|css)[ \t]*\r?\n([\s\S]*?)^ {0,3}```[ \t]*(?=\r?$)/im);
+    if (!block || block.index !== 0) break;
+    header[block[1].toLowerCase()] = block[2];
+    end += block[0].length;
+  }
+  return { metadata: parseMetadata(header.metadata || ""), css: header.css || "", end };
 }
 
 function parseDocument(source, config = {}) {
-  const metadataMatch = source.match(/```metadata\s*([\s\S]*?)```/i);
-  const cssMatch = source.match(/```css\s*([\s\S]*?)```/i);
-  const metadata = parseMetadata(metadataMatch?.[1] || "");
-  const bodyStart = cssMatch ? cssMatch.index + cssMatch[0].length : (metadataMatch ? metadataMatch.index + metadataMatch[0].length : 0);
-  const body = source.slice(bodyStart).trim();
+  const { metadata, css, end } = markdownHeader(source);
+  const body = source.slice(end).trim();
   const pageBreaks = (body.match(/\\page\b/g) || []).length;
   const entries = buildEntries(body, config);
   const allBody = body.replace(/\\page\b/g, "\n");
   const imageMatches = [...allBody.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
   const keptImages = imageMatches.filter((match) => !shouldIgnoreImage(match[1], match[2], config)).length;
-  return { metadata, css: cssMatch?.[1] || "", entries, pageBreaks, images: keptImages, tables: (allBody.match(/\{\{fancyTable\b/gi) || []).length, directives: (allBody.match(/\{\{[^\n}]*/g) || []).length };
+  return { metadata, css, entries, pageBreaks, images: keptImages, tables: (allBody.match(/\{\{fancyTable\b/gi) || []).length, directives: (allBody.match(/\{\{[^\n}]*/g) || []).length };
+}
+
+function findMarkdownHeadings(source, start = 0) {
+  const headings = [];
+  let fence = "";
+  for (const line of source.slice(start).matchAll(/^[^\r\n]+/gm)) {
+    const marker = line[0].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = "";
+      continue;
+    }
+    if (marker) {
+      fence = marker[1];
+      continue;
+    }
+    const heading = parseHeadingLine(line[0]);
+    if (!heading) continue;
+    headings.push({ ...heading, index: start + line.index, length: line[0].length });
+  }
+  return headings;
+}
+
+function parseHeadingLine(line) {
+  const heading = line.match(/^( {0,3})(#{1,6})([ \t]+)(\S.*)$/);
+  if (!heading) return null;
+  const [, indent, hashes, space, content] = heading;
+  const title = content.replace(/[ \t]+#+[ \t]*$/, "").trimEnd();
+  return { indent, level: hashes.length, space, title, suffix: content.slice(title.length) };
+}
+
+function entryHeadingLevel(config) {
+  return config.rules?.entryHeadingLevel || config.entryHeadingLevel || 2;
 }
 
 function buildEntries(body, config = {}) {
   const withoutPageBreaks = body.replace(/\\page\b/g, "\n");
-  const entryLevel = config.rules?.entryHeadingLevel || config.entryHeadingLevel || 2;
-  const entryPrefix = "#".repeat(entryLevel);
-  const headingMatches = [...withoutPageBreaks.matchAll(new RegExp(`^${entryPrefix}\\s+(.+)$`, "gm"))];
+  const headingMatches = findMarkdownHeadings(withoutPageBreaks).filter((heading) => heading.level === entryHeadingLevel(config));
   if (!headingMatches.length) return [createEntry(withoutPageBreaks, 0, config)];
   const entries = [];
   const preamble = withoutPageBreaks.slice(0, headingMatches[0].index).trim();
@@ -141,11 +396,12 @@ function buildEntries(body, config = {}) {
 
 function createEntry(raw, index, config = {}) {
   const normalized = cleanSource(applyConversionRules(raw, config));
-  const headings = [...normalized.matchAll(/^(#{1,6})\s+(.+)$/gm)].map((match) => ({ level: match[1].length, text: stripMarkup(match[2]) }));
+  const headings = findMarkdownHeadings(normalized);
   const firstHeading = headings.find((heading) => heading.level <= 3);
+  const entryHeading = headings[0]?.level === entryHeadingLevel(config) ? headings[0] : firstHeading;
   const imageAlt = normalized.match(/!\[([^\]]+)\]/)?.[1];
-  let title = firstHeading?.text || (index === 0 ? "Cover" : imageAlt || `Entry ${index + 1}`);
-  if (index === 1 && !firstHeading) title = "Inside cover";
+  let title = entryHeading ? stripMarkup(entryHeading.title) : "";
+  if (!title) title = index === 0 ? "Cover" : index === 1 ? "Inside cover" : imageAlt || `Entry ${index + 1}`;
   return { raw, normalized, headings, title };
 }
 
@@ -191,19 +447,19 @@ function markdownToBlocks(source, config, assets) {
     if (!line) { index += 1; continue; }
     if (line === "<!--COLUMN_BREAK-->") { blocks.push({ type: "divider", style: "column-break" }); index += 1; continue; }
     if (/^<div class=['"]video-section['"]>/i.test(line)) { blocks.push(parseVideoBlock(line)); index += 1; continue; }
-    const image = line.match(/^!\[([^\]]*)\]\(([^)]+)\)(?:\{([^}]*)\})?$/);
+    const image = parseMarkdownImage(line);
     if (image) {
-      const [, alt, url] = image;
+      const { alt, url } = image;
       const rule = findImageRule(alt, url, config);
       if (!shouldIgnoreImage(alt, url, config) && rule?.action !== "ignore") {
         const assetId = getAssetId(alt, url, assets);
-        blocks.push({ type: "image", assetId, role: imageRole(alt), placement: rule?.location || "inline", className: rule?.className, width: rule?.width });
+        blocks.push({ type: "image", assetId, role: imageRole(alt), placement: rule?.location || "inline", className: rule?.className, width: rule?.width, [markdownImage]: image });
       }
       index += 1;
       continue;
     }
-    const heading = line.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) { blocks.push({ type: "heading", level: heading[1].length, text: stripMarkup(heading[2]) }); index += 1; continue; }
+    const heading = parseHeadingLine(line);
+    if (heading) { blocks.push({ type: "heading", level: heading.level, text: stripMarkup(heading.title) }); index += 1; continue; }
     if (/^\|.*\|$/.test(line)) {
       const tableLines = [];
       while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index].trim())) tableLines.push(lines[index++].trim());
@@ -235,6 +491,74 @@ function getAssetId(alt, url, assets) {
   return id;
 }
 
+function parseMarkdownImage(line) {
+  const match = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?$/);
+  return match ? { alt: match[1], url: match[2] } : null;
+}
+
+function refreshImageSlots() {
+  const contexts = new Map();
+  const body = state.source.slice(markdownHeader(state.source).end);
+  const lines = body.replace(/\\page\b/g, "\n\\page\n").split(/\r?\n/);
+  const hasPages = lines.includes("\\page");
+  let page = 1;
+  let heading = "";
+  lines.forEach((line, index) => {
+    if (line === "\\page") page += 1;
+    const title = parseHeadingLine(line.trim());
+    if (title) heading = stripMarkup(title.title);
+    const image = parseMarkdownImage(line);
+    if (!image) return;
+    const pair = JSON.stringify([image.alt, image.url]);
+    if (!contexts.has(pair)) contexts.set(pair, []);
+    const before = nearbyImageText(lines, index, -1);
+    const after = nearbyImageText(lines, index, 1);
+    const caption = [after, before].find((text) => /^(?:(?:fig(?:ure)?\.?|caption)\s|\*[^*]+\*$|_[^_]+_$)/i.test(text));
+    contexts.get(pair).push({
+      page: hasPages ? page : null, heading, before: stripMarkup(before), after: stripMarkup(after),
+      caption: caption ? stripMarkup(caption) : ""
+    });
+  });
+
+  state.imageSlots = [];
+  state.previewImages = new WeakMap();
+  const occurrences = new Map();
+  state.entries.forEach((entry, entryIndex) => {
+    entry.blocks.forEach((block) => {
+      const image = block[markdownImage];
+      if (!image) return;
+      const pair = JSON.stringify([image.alt, image.url]);
+      const occurrence = occurrences.get(pair) || 0;
+      occurrences.set(pair, occurrence + 1);
+      const key = JSON.stringify([image.alt, image.url, occurrence]);
+      const context = contexts.get(pair)?.[occurrence] || { page: null, heading: entry.title, before: "", after: "", caption: "" };
+      state.imageSlots.push({ ...image, ...context, key, entryIndex, entryTitle: entry.title });
+      const recovery = state.recoveredImages.get(key);
+      if (recovery) state.previewImages.set(block, recovery);
+    });
+  });
+}
+
+function nearbyImageText(lines, start, direction) {
+  for (let index = start + direction; index >= 0 && index < lines.length; index += direction) {
+    const line = lines[index].trim();
+    if (/^\\page\b|^\\column\b/.test(line) || parseHeadingLine(line) || parseMarkdownImage(line)) return "";
+    if (line && !/^(?:[{}:]+|\{\{.*|<!--.*)$/.test(line)) return line.slice(0, 240);
+  }
+  return "";
+}
+
+function updateImageRecovery(slot, image) {
+  const previous = state.recoveredImages.get(slot.key);
+  if (previous) URL.revokeObjectURL(previous.url);
+  if (image) state.recoveredImages.set(slot.key, { ...image, url: URL.createObjectURL(image.blob) });
+  else state.recoveredImages.delete(slot.key);
+  refreshImageSlots();
+  updateExportLabel();
+  state.currentPage = slot.entryIndex;
+  renderPage();
+}
+
 function imageRole(alt) {
   const label = alt.toLowerCase();
   if (label.includes("emblem")) return "emblem";
@@ -259,9 +583,9 @@ function applyConversionRules(source, config) {
   const lines = source.split(/\r?\n/);
   const moved = [];
   const kept = lines.filter((line) => {
-    const image = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?$/);
+    const image = parseMarkdownImage(line);
     if (!image) return true;
-    const rule = findImageRule(image[1], image[2], config);
+    const rule = findImageRule(image.alt, image.url, config);
     if (rule?.action === "ignore") return false;
     if (rule?.action === "move") { moved.push(line); return false; }
     return true;
@@ -302,13 +626,14 @@ function shouldIgnoreImage(alt, url, config = {}) {
 }
 
 function renderPackageBlock(block, assets, entryIndex, blockIndex) {
-  if (block.type === "heading") { const level = Math.min(Math.max(block.level, 2), 5); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
+  if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
   if (block.type === "paragraph") return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${inlineMarkdown(block.text)}</p>`;
   if (block.type === "list") return `<ul>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`;
   if (block.type === "table") return `<table><thead><tr>${block.columns.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   if (block.type === "divider") return `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {
-    const asset = assets.find((candidate) => candidate.id === block.assetId);
+    const recovery = state.previewImages.get(block);
+    const asset = recovery ? { src: recovery.url, alt: recovery.caption } : assets.find((candidate) => candidate.id === block.assetId);
     if (!asset) return "";
     const semanticClass = block.role === "emblem" ? " entry-emblem" : "";
     const placementClass = block.placement === "entry-top-right" ? " entry-emblem--top-right" : "";
@@ -487,16 +812,55 @@ function applyTheme(theme = {}) {
   Object.entries(theme.tokens || {}).forEach(([token, value]) => { if (aliases[token]) root.style.setProperty(aliases[token], value); });
 }
 
-function exportBookJson() {
+function updateExportLabel() {
+  $("#exportButton").textContent = state.recoveredImages.size ? "Export Book ZIP" : "Export JSON";
+}
+
+function exportBook() {
   if (!state.bookPackage) return;
+  if (state.recoveredImages.size) {
+    prepareBookZip();
+    return;
+  }
   const blob = new Blob([JSON.stringify(state.bookPackage, null, 2)], { type: "application/json" });
+  downloadBookFile(blob, `${state.bookPackage.book.id}.json`);
+}
+
+async function prepareBookZip() {
+  const dialog = $("#bookZipExport");
+  const status = $("#bookZipExportStatus");
+  const download = $("#downloadBookZip");
+  const current = { fileName: `${state.bookPackage.book.id}.zip` };
+  zipExport = current;
+  status.textContent = "Preparing the ZIP…";
+  download.disabled = true;
+  dialog.showModal();
+  try {
+    const { blob, imageCount } = await window.bookArchive.create(state.bookPackage, (block) => state.previewImages.get(block));
+    if (zipExport !== current || !dialog.open) return;
+    current.blob = blob;
+    const size = blob.size >= 1024 ** 2 ? `${(blob.size / 1024 ** 2).toFixed(1)} MiB` : `${(blob.size / 1024).toFixed(1)} KiB`;
+    status.textContent = `${current.fileName} · ${size} · ${imageCount} recovered image${imageCount === 1 ? "" : "s"}`;
+    download.disabled = false;
+  } catch (error) {
+    if (zipExport === current && dialog.open) status.textContent = `Could not prepare the ZIP. ${error.message}`;
+  }
+}
+
+function downloadBookZip() {
+  if (!zipExport?.blob) return;
+  downloadBookFile(zipExport.blob, zipExport.fileName);
+  $("#bookZipExport").close();
+}
+
+function downloadBookFile(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${state.bookPackage.book.id}.json`;
+  link.download = fileName;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  showNotice(`Exported ${link.download}`);
+  showNotice(`Exported ${fileName}`);
 }
 
 function validateBookPackage(bookPackage) {

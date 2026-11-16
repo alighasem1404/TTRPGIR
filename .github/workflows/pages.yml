@@ -1,0 +1,67 @@
+name: GitHub Pages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      PDFJS_VERSION: "6.5.438"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Build the static site
+        run: |
+          pdf_dir="${RUNNER_TEMP}/pdfjs"
+          mkdir -p "$pdf_dir"
+          npm pack --ignore-scripts --pack-destination "$pdf_dir" "pdfjs-dist@${PDFJS_VERSION}"
+          tar -xzf "$pdf_dir/pdfjs-dist-${PDFJS_VERSION}.tgz" -C "$pdf_dir"
+          node scripts/build-pages.mjs "$pdf_dir/package"
+      - name: Test the project site under a repository path
+        run: node scripts/smoke-pages.mjs
+      - uses: actions/upload-pages-artifact@v4
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Test the live GitHub Pages site
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          curl --fail --silent --show-error --retry 8 --retry-all-errors --max-time 15 "${SITE_URL%/}/bookmaker.html" --output /dev/null
+          node scripts/smoke-pages.mjs "$SITE_URL"

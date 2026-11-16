@@ -2,13 +2,19 @@
 
 The Book Maker and Book Reader communicate through one canonical `book.json` package. The full contract is defined in [book-format.schema.json](book-format.schema.json). The Euphoria sample package is at [books/euphoria-demo/book.json](books/euphoria-demo/book.json).
 
-The working local loop is: import Markdown, convert it into this package in memory, export the package as JSON, and load that JSON back into the same reader. The reader renders package blocks rather than the original Markdown.
+Import Markdown in Book Maker and open the exported book in the Reader. The Reader renders package blocks from the JSON, whether it comes from a standalone file or a ZIP.
 
 The local tools are intentionally separated:
 
-- `bookmaker.html` is the private preparation tool. It reads Markdown, applies the builder conversion profile, previews the generated package, and exports JSON.
-- `index.html` is the Book Reader. It loads JSON only and contains no Markdown parser or conversion controls.
+- `bookmaker.html` is the preparation tool. It reads Markdown, applies the builder conversion profile, previews the generated package, and exports JSON or a book ZIP.
+- `index.html` is the Book Reader. It opens standalone JSON and book ZIPs.
 - `book-format.schema.json` is the shared contract between them.
+
+## Book ZIP
+
+Book Maker exports a ZIP once a replacement image has been applied. The archive contains `book.json` at the top level and the recovered PNGs in `images/`. Each recovered asset points to its file with an archive-relative path such as `images/moonlit-market.png`. Original asset URLs still apply to figures without replacements.
+
+Open the ZIP directly in the Reader to use its bundled PNGs offline. Any original image URLs that point to the web still need a network connection. You can also extract the ZIP to reuse the PNG files separately. The archive uses the existing Book JSON v1 schema.
 
 ## Responsibilities
 

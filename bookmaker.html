@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=11" />
+    <link rel="stylesheet" href="styles.css?v=17" />
   </head>
   <body>
     <div class="app-shell maker-page">
@@ -43,9 +43,21 @@
             <p>Source decisions stay here. The published reader only receives the finished package.</p>
             <div class="maker-steps">
               <div class="maker-step active"><b>01</b><span>Import Markdown</span></div>
-              <div class="maker-step active"><b>02</b><span>Build JSON package</span></div>
+              <div class="maker-step active"><b>02</b><span>Edit headings</span></div>
               <div class="maker-step"><b>03</b><span>Export to reader</span></div>
             </div>
+            <div class="heading-actions">
+              <button id="openHeadings" type="button" disabled>Edit headings</button>
+              <button id="undoHeadings" type="button" disabled>Undo heading edit</button>
+            </div>
+            <div class="heading-actions">
+              <button id="attachPdf" type="button" disabled>Attach matching PDF</button>
+              <button id="reviewPdf" type="button" hidden>Review PDF</button>
+              <button id="openImageRecovery" type="button" hidden>Recover images</button>
+              <button id="removePdf" type="button" hidden>Remove PDF</button>
+              <input id="pdfInput" type="file" accept=".pdf,application/pdf" hidden />
+            </div>
+            <p id="pdfAttachmentStatus" class="pdf-status" role="status"></p>
           </div>
 
           <div class="sidebar-section">
@@ -103,9 +115,137 @@
           <div class="support-card muted-card"><span class="support-icon">→</span><div><strong>Next step</strong><p>Open the exported package in index.html to test the independent reader.</p></div></div>
         </aside>
       </main>
+      <dialog id="headingEditor" aria-labelledby="headingEditorTitle">
+        <div class="heading-dialog-header">
+          <h2 id="headingEditorTitle">Edit headings</h2>
+          <form method="dialog"><button type="submit">Cancel</button></form>
+        </div>
+        <section id="headingEditView">
+          <label class="heading-search">Search headings
+            <input id="headingSearch" type="search" autocomplete="off" autofocus />
+          </label>
+          <div class="heading-bulk">
+            <label><input id="selectHeadings" type="checkbox" /> Select visible</label>
+            <span id="headingSelection" aria-live="polite"></span>
+            <label>Bulk level change
+              <select id="headingBulkOperation">
+                <option value="up">Promote one level</option>
+                <option value="down">Demote one level</option>
+                <option value="1">Set to H1</option>
+                <option value="2">Set to H2</option>
+                <option value="3">Set to H3</option>
+                <option value="4">Set to H4</option>
+                <option value="5">Set to H5</option>
+                <option value="6">Set to H6</option>
+              </select>
+            </label>
+            <button id="updateSelectedHeadings" type="button" disabled>Update selected</button>
+          </div>
+          <p id="headingEntryHint" class="heading-hint"></p>
+          <div id="headingRows" class="heading-columns" role="group" aria-label="Markdown headings by level"></div>
+          <p id="headingEmpty" class="heading-hint" hidden>No matching headings.</p>
+          <p id="headingMessage" class="heading-hint" role="status"></p>
+          <div class="heading-dialog-actions">
+            <button id="previewHeadings" type="button" disabled>Preview changes</button>
+          </div>
+        </section>
+        <section id="headingPreviewView" hidden>
+          <h3 id="headingPreviewTitle" tabindex="-1">Table of contents preview</h3>
+          <p id="headingPreviewSummary" class="heading-hint"></p>
+          <ol id="headingPreviewContents" class="heading-preview-contents"></ol>
+          <div class="heading-dialog-actions">
+            <button id="backToHeadingEdit" type="button">Back to edits</button>
+            <button id="applyHeadings" type="button">Apply changes</button>
+          </div>
+        </section>
+      </dialog>
+      <dialog id="imageRecovery" aria-labelledby="imageRecoveryTitle">
+        <div class="pdf-toolbar">
+          <h2 id="imageRecoveryTitle">Recover images</h2>
+          <form method="dialog"><button type="submit">Close</button></form>
+        </div>
+        <p id="recoveryStatus" class="pdf-status" role="status"></p>
+        <div class="pdf-toolbar">
+          <button id="scanImageLinks" type="button">Check image links again</button>
+          <button id="cancelImageScan" type="button" hidden>Cancel scan</button>
+        </div>
+        <div id="recoveryReview" hidden>
+          <div class="recovery-field">
+            <label for="brokenImageList">Image to review</label>
+            <select id="brokenImageList"></select>
+          </div>
+          <p id="recoveryContext"></p>
+          <p id="recoveryConfidence" class="pdf-status" role="status"></p>
+          <ul id="recoveryCandidates" aria-label="Suggested PDF images"></ul>
+          <div class="pdf-toolbar">
+            <button id="browseRecoveryPdf" type="button">Browse PDF or crop</button>
+            <button id="skipRecovery" type="button">Skip image</button>
+            <button id="restoreRecovery" type="button" hidden>Restore original link</button>
+          </div>
+          <form id="recoveryForm" hidden>
+            <img id="recoveryChosenImage" alt="Selected replacement image" />
+            <div class="recovery-field">
+              <label for="recoveryFileName">PNG filename</label>
+              <input id="recoveryFileName" type="text" maxlength="96" required />
+              <label for="recoveryCaption">Reader caption</label>
+              <input id="recoveryCaption" type="text" dir="auto" />
+            </div>
+            <button type="submit">Apply replacement</button>
+          </form>
+          <p class="pdf-status">Applied images appear in the preview and are included in the book ZIP.</p>
+        </div>
+      </dialog>
+      <dialog id="pdfInspector" aria-labelledby="pdfInspectorTitle">
+        <div class="pdf-toolbar">
+          <h2 id="pdfInspectorTitle">Review PDF</h2>
+          <form method="dialog"><button type="submit">Close</button></form>
+        </div>
+        <div class="pdf-toolbar">
+          <button id="pdfPrevious" type="button">Previous page</button>
+          <label>Page <input id="pdfPageNumber" type="number" min="1" value="1" /></label>
+          <span id="pdfPageTotal"></span>
+          <button id="pdfNext" type="button">Next page</button>
+        </div>
+        <p id="pdfPageStatus" class="pdf-status" role="status"></p>
+        <div id="pdfPageBody" class="pdf-page-layout" hidden>
+          <section aria-label="Page preview">
+            <div class="pdf-toolbar">
+              <button id="pdfCrop" type="button" aria-pressed="false">Select crop</button>
+              <button id="pdfSaveCrop" type="button" disabled>Download crop</button>
+              <button id="pdfUseCrop" type="button" disabled hidden>Use crop as replacement</button>
+            </div>
+            <p id="pdfCropHint" hidden>Drag a rectangle over the figure you want to save.</p>
+            <div id="pdfPreviewStage">
+              <canvas id="pdfPageCanvas" aria-label="Rendered PDF page"></canvas>
+              <div id="pdfCropOutline" aria-hidden="true" hidden></div>
+            </div>
+          </section>
+          <section aria-labelledby="pdfImagesTitle">
+            <h3 id="pdfImagesTitle">Embedded images</h3>
+            <p id="pdfImageSummary"></p>
+            <ul id="pdfImages"></ul>
+            <details>
+              <summary>Page text</summary>
+              <pre id="pdfPageText"></pre>
+            </details>
+          </section>
+        </div>
+      </dialog>
+      <dialog id="bookZipExport" aria-labelledby="bookZipExportTitle">
+        <h2 id="bookZipExportTitle">Export book ZIP</h2>
+        <p id="bookZipExportStatus" role="status"></p>
+        <div class="heading-dialog-actions">
+          <form method="dialog"><button type="submit">Cancel</button></form>
+          <button id="downloadBookZip" type="button" disabled>Download ZIP</button>
+        </div>
+      </dialog>
       <div id="notice" class="notice" role="status" hidden></div>
     </div>
     <script src="image-viewer.js?v=1"></script>
-    <script src="app.js?v=10"></script>
+    <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
+    <script src="book-archive.js?v=1"></script>
+    <script src="app.js?v=15"></script>
+    <script src="pdf-import.js?v=3" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
+    <script src="image-recovery.js?v=2"></script>
   </body>
 </html>

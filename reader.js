@@ -1,43 +1,55 @@
 const BOOK_PATH = "books/euphoria-demo/book.json";
 
-const readerState = { bookPackage: null, entries: [], currentEntry: 0, search: "" };
+const readerState = { bookPackage: null, entries: [], currentEntry: 0, search: "", bundledImages: new Map() };
 const $ = (selector) => document.querySelector(selector);
+let bookRequest;
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#previousButton").addEventListener("click", () => goToEntry(readerState.currentEntry - 1));
   $("#nextButton").addEventListener("click", () => goToEntry(readerState.currentEntry + 1));
   $("#searchInput").addEventListener("input", (event) => { readerState.search = event.target.value.trim().toLowerCase(); renderContents(); });
-  $("#jsonInput").addEventListener("change", loadSelectedJson);
+  $("#jsonInput").addEventListener("change", loadSelectedBook);
   loadDefaultBook();
 });
 
 async function loadDefaultBook() {
+  const request = new AbortController();
+  bookRequest = request;
   try {
-    const response = await fetch(BOOK_PATH);
+    const response = await fetch(BOOK_PATH, { signal: request.signal });
     if (!response.ok) throw new Error("The default book package is unavailable.");
-    loadPackage(JSON.parse(await response.text()), "Euphoria Demo book.json");
+    const bookPackage = await response.json();
+    request.signal.throwIfAborted();
+    loadPackage(bookPackage, "Euphoria Demo book.json");
   } catch (error) {
-    setStatus("Open a book JSON package to begin");
+    if (request.signal.aborted) return;
+    setStatus("Open a book ZIP or JSON package to begin");
     showNotice(error.message);
   }
 }
 
-function loadSelectedJson(event) {
+async function loadSelectedBook(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.addEventListener("load", () => {
-    try {
-      const bookPackage = JSON.parse(String(reader.result));
-      validateBookPackage(bookPackage);
-      loadPackage(bookPackage, file.name);
-    } catch (error) { showNotice(`Could not load this book JSON: ${error.message}`); }
-  });
-  reader.readAsText(file);
+  event.target.value = "";
+  bookRequest?.abort();
+  const request = new AbortController();
+  bookRequest = request;
+  try {
+    const { bookPackage, images } = /\.zip$/i.test(file.name)
+      ? await window.bookArchive.open(file, validateBookPackage, request.signal)
+      : { bookPackage: JSON.parse(await file.text()) };
+    request.signal.throwIfAborted();
+    loadPackage(bookPackage, file.name, images);
+  } catch (error) {
+    if (!request.signal.aborted) showNotice(`Could not open ${file.name}. ${error.message}`);
+  }
 }
 
-function loadPackage(bookPackage, fileName) {
+function loadPackage(bookPackage, fileName, images = new Map()) {
   validateBookPackage(bookPackage);
+  const previousImages = readerState.bundledImages;
+  readerState.bundledImages = new Map([...images].map(([path, blob]) => [path, URL.createObjectURL(blob)]));
   readerState.bookPackage = bookPackage;
   readerState.entries = bookPackage.entries;
   readerState.currentEntry = 0;
@@ -45,6 +57,7 @@ function loadPackage(bookPackage, fileName) {
   applyPackageMeta(bookPackage);
   renderContents();
   renderEntry();
+  for (const url of previousImages.values()) URL.revokeObjectURL(url);
   setStatus(`Loaded ${fileName}`);
 }
 
@@ -87,14 +100,15 @@ function goToEntry(index) {
 }
 
 function renderBlock(block, assets, entryIndex, blockIndex) {
-  if (block.type === "heading") { const level = Math.min(Math.max(block.level, 2), 5); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
+  if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
   if (block.type === "paragraph") return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${inlineMarkdown(block.text)}</p>`;
   if (block.type === "list") return `<ul>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`;
   if (block.type === "table") return `<table><thead><tr>${block.columns.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   if (block.type === "divider") return `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {
-    const asset = assets.find((candidate) => candidate.id === block.assetId);
-    if (!asset) return "";
+    const original = assets.find((candidate) => candidate.id === block.assetId);
+    if (!original) return "";
+    const asset = { ...original, src: readerState.bundledImages.get(original.src) || original.src };
     const semanticClass = block.role === "emblem" ? " entry-emblem" : "";
     const placementClass = block.placement === "entry-top-right" ? " entry-emblem--top-right" : "";
     const customClass = block.className ? ` ${block.className.replace(/[^a-z0-9_-]/gi, "")}` : "";
@@ -145,6 +159,21 @@ function validateBookPackage(bookPackage) {
   if (!bookPackage || bookPackage.format !== "ttrpg-book") throw new Error("The file is not a ttrpg-book package.");
   if (!Number.isInteger(bookPackage.schemaVersion)) throw new Error("The package is missing schemaVersion.");
   if (!bookPackage.book?.title || !Array.isArray(bookPackage.entries) || !Array.isArray(bookPackage.assets)) throw new Error("The package is missing book, entries, or assets.");
+  if (bookPackage.assets.some((asset) => !asset || typeof asset.id !== "string" || typeof asset.src !== "string")) {
+    throw new Error("A book asset has an invalid ID or source.");
+  }
+  if (bookPackage.entries.some((entry) => !entry || !Array.isArray(entry.blocks) || entry.blocks.some((block) => !isReadableBlock(block)))) {
+    throw new Error("A book entry contains invalid content blocks.");
+  }
+}
+
+function isReadableBlock(block) {
+  if (!block || typeof block.type !== "string") return false;
+  if (block.type === "image") return !block.className || typeof block.className === "string";
+  if (block.type === "list") return Array.isArray(block.items);
+  if (block.type === "table") return Array.isArray(block.columns) && Array.isArray(block.rows) && block.rows.every(Array.isArray);
+  if (block.type === "embed" && block.kind === "video-grid") return Array.isArray(block.items) && block.items.every((item) => item && typeof item === "object");
+  return true;
 }
 
 function inlineMarkdown(value) { let html = escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>'); }
