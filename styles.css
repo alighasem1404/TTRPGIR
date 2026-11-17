@@ -157,6 +157,9 @@ button { cursor: pointer; }
 #bookEditingStatus { margin: 8px 0 0; color: var(--wine-dark); }
 #bookEditingStatus:empty { display: none; }
 .book-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.book-edit-scope { min-width: 0; padding: 8px; margin: 0; border: 1px solid var(--gold-dark); border-radius: 5px; }
+.book-edit-scope legend { padding: 0 4px; font-weight: 700; }
+.book-edit-scope p { margin: 6px 0 2px; color: var(--ink-soft); }
 #bookEditing .book-edit-actions button[value="save"] { color: #fff3db; background: var(--wine-dark); }
 .book-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
 .book-crop-stage { position: relative; overflow: hidden; width: fit-content; max-width: 100%; margin: 0 auto 8px; }

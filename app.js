@@ -356,7 +356,7 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
     }
     for (const [index, original] of entry.blocks.entries()) {
       const edit = changes.get(original);
-      const block = edit ? { ...original, level: edit.level, text: stripMarkup(edit.title) } : original;
+      const block = edit ? edit.block || { ...original, level: edit.level, text: stripMarkup(edit.title) } : original;
       if (index > 0 && edit?.level === level && original.level !== level) {
         const base = slugify(edit.title) || "entry";
         let id = base;

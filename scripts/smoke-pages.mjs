@@ -185,9 +185,97 @@ async function smoke(width) {
       }
     }
     await smokeBookEditing(browser, width);
+    await smokeBulkEditing(browser, width);
   } finally {
     browser.close();
   }
+}
+
+async function smokeBulkEditing(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Bulk editing demo");
+  await maker.upload("mdInput", "bulk-editing.md", [
+    "## First Book", "### Sample", "First sample wording.", "", "Other opening paragraph.",
+    "![background image](missing-backdrop-a.png)", "![Books Image](missing-art-a.png)",
+    "## Second Book", "### Sample", "Second sample wording.", "", "Other closing paragraph.",
+    "![Background Image](missing-backdrop-b.png)", "![Books Image](missing-art-b.png)"
+  ].join("\n"));
+  await maker.until(() => state.entries[0]?.title === "First Book", "Bulk editing fixture");
+  const counts = await maker.evaluate(() => {
+    const byId = (id) => document.getElementById(id);
+    const form = byId("bookEditingForm");
+    const pick = (value) => {
+      form.elements.scope.value = value;
+      form.elements.scope.dispatchEvent(new Event("change"));
+      return form.querySelector("[data-scope-count]").textContent;
+    };
+    const submit = (value = "save") => form.requestSubmit(form.querySelector(`button[value="${value}"]`));
+    const clickText = (tag, text) => [...document.querySelectorAll(`#pageViewport ${tag}`)].find((element) => element.textContent === text).click();
+    byId("toggleBookEditing").click();
+    document.querySelector('#pageViewport img[alt="background image"]').click();
+    const removed = pick("image-label");
+    const removeButton = form.querySelector('button[value="remove"]').textContent;
+    submit("remove");
+
+    clickText("p", "First sample wording.");
+    const paragraphs = pick("section-position");
+    form.elements.format.value = "book-quote";
+    form.elements.text.value = "Do not copy this wording.";
+    submit();
+
+    clickText("p", "Other opening paragraph.");
+    const sameFormat = pick("paragraph-style");
+    form.elements.format.value = "book-callout";
+    form.elements.replaceText.checked = true;
+    form.elements.text.value = "Shared callout wording.";
+    submit();
+
+    clickText("h3", "Sample");
+    pick("heading");
+    form.elements.text.value = "Excerpt";
+    submit();
+
+    document.querySelector('#pageViewport img[alt="Books Image"]').click();
+    pick("image-label");
+    form.elements.width.value = "45";
+    form.elements.caption.value = "Shared artwork caption";
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 12;
+    const data = Uint8Array.from(atob(canvas.toDataURL().split(",")[1]), (char) => char.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([data], "shared-art.png", { type: "image/png" }));
+    form.elements.upload.files = transfer.files;
+    form.elements.crop.checked = true;
+    form.elements.w.value = "50";
+    submit();
+    return { removed, removeButton, paragraphs, sameFormat };
+  });
+  assert.equal(counts.removed, "2 images in 2 entries.");
+  assert.equal(counts.removeButton, "Remove 2 matching images");
+  assert.equal(counts.paragraphs, "2 blocks in 2 entries.");
+  assert.equal(counts.sameFormat, "2 blocks in 2 entries.");
+  await maker.until(() => !document.getElementById("bookEditing").open && state.recoveredImages.size === 2, "Bulk image changes applied");
+  const result = await maker.evaluate(async () => {
+    const book = window.bookEditing.exportPackage();
+    const zip = await window.bookArchive.create(book, (block) => state.previewImages.get(block));
+    const archive = await JSZip.loadAsync(await zip.blob.arrayBuffer());
+    return {
+      text: book.entries.map((entry) => entry.blocks.filter((block) => block.type === "paragraph").map(({ text, style }) => [text, style || ""])),
+      headings: book.entries.map((entry) => entry.blocks.find(({ level }) => level === 3).text),
+      images: book.entries.map((entry) => entry.blocks.filter(({ type }) => type === "image").map((block) => ({ width: block.width, caption: block.caption, fileName: state.previewImages.get(block).fileName }))),
+      urls: book.assets.map(({ src }) => src),
+      files: Object.keys(archive.files).filter((name) => name.endsWith(".png")),
+    };
+  });
+  assert.deepEqual(result.text, [
+    [["First sample wording.", "book-quote"], ["Shared callout wording.", "book-callout"]],
+    [["Second sample wording.", "book-quote"], ["Shared callout wording.", "book-callout"]]
+  ]);
+  assert.deepEqual(result.headings, ["Excerpt", "Excerpt"]);
+  assert.deepEqual(result.images, [[{ width: "45%", caption: "Shared artwork caption", fileName: "shared-art.png" }],
+    [{ width: "45%", caption: "Shared artwork caption", fileName: "shared-art-2.png" }]]);
+  assert.ok(result.urls.every((url) => !url.includes("backdrop")));
+  assert.deepEqual(result.files, ["images/shared-art.png", "images/shared-art-2.png"]);
 }
 
 async function smokeBookEditing(browser, width) {

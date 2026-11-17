@@ -99,6 +99,82 @@
     return options.map(([value, label]) => `<option value="${escapeAttribute(value)}"${value === selected ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
   }
 
+  function editScope(entry, index) {
+    const selected = entry.blocks[index];
+    if (!selected) return new Map();
+    const matches = new Map([["single", { label: "This item only", targets: [{ entry, index, block: selected }] }]]);
+    const assets = new Map(state.bookPackage.assets.map((asset) => [asset.id, asset]));
+    const imageLabel = (block) => sectionName(block[markdownImage]?.alt ?? (block.alt || assets.get(block.assetId)?.alt || ""));
+    const imageUrl = (block) => assets.get(block.assetId)?.src;
+    const label = selected.type === "image" ? imageLabel(selected) : "";
+    const url = selected.type === "image" ? imageUrl(selected) : "";
+    const section = selected.type === "paragraph" ? paragraphPosition(entry, index) : null;
+    const candidates = state.entries.flatMap((item) => item.blocks.flatMap((block, index) =>
+      block.type === selected.type && !block[sourceHidden] ? [{ entry: item, index, block }] : []));
+    function add(value, label, test) {
+      const targets = candidates.filter(test);
+      if (targets.length > 1) matches.set(value, { label, targets });
+    }
+    if (selected.type === "image") {
+      if (label) add("image-label", `Same image label: ${selected[markdownImage]?.alt ?? (selected.alt || assets.get(selected.assetId)?.alt)}`,
+        ({ block }) => imageLabel(block) === label);
+      if (url && url !== "about:blank") add("image-url", "Same image URL", ({ block }) => imageUrl(block) === url);
+    } else if (selected.type === "heading") {
+      add("heading", `Same H${selected.level} title`, ({ block }) =>
+        block.level === selected.level && sectionName(block.text) === sectionName(selected.text));
+    } else if (selected.type === "paragraph") {
+      add("text", "Identical text", ({ block }) => block.text === selected.text);
+      if (section) {
+        const atPosition = new Set(state.entries.flatMap(({ blocks }) => splitSections(blocks)
+          .filter(({ title }) => title && sectionName(title) === section.key)
+          .map(({ blocks }) => blocks.filter((block) => block.type === "paragraph" && !block[sourceHidden])[section.number - 1])));
+        add("section-position", `Paragraph ${section.number} under ${section.title}`, ({ block }) => atPosition.has(block));
+      }
+      add("paragraph-style", "Same paragraph format across the book", ({ block }) => (block.style || "") === (selected.style || ""));
+    }
+    return matches;
+  }
+
+  function paragraphPosition(entry, index) {
+    let number = 0;
+    for (let previous = index; previous >= 0; previous -= 1) {
+      const block = entry.blocks[previous];
+      if (block.type === "heading" && block.level <= 3) {
+        if (block.level === 3) return { title: block.text, key: sectionName(block.text), number };
+        return null;
+      }
+      if (block.type === "paragraph" && !block[sourceHidden]) number += 1;
+    }
+    return null;
+  }
+
+  function scopeField(scopes, paragraph = false) {
+    if (scopes.size < 2) return "";
+    const options = [...scopes].map(([value, { label, targets }]) => [value, `${label} (${targets.length})`]);
+    return `<fieldset class="book-edit-scope"><legend>Apply to</legend>
+      <select name="scope" aria-label="Edit scope">${displayOptions(options, "single")}</select>
+      <div data-scope-details hidden>
+        <p data-scope-count role="status"></p>
+        ${paragraph ? '<label class="book-edit-check"><input name="replaceText" type="checkbox"> Use the text above for every match</label>' : ""}
+      </div></fieldset>`;
+  }
+
+  function wireScope(scopes, noun) {
+    const selector = form.elements.scope;
+    if (!selector) return;
+    selector.addEventListener("change", () => {
+      const { targets } = scopes.get(selector.value);
+      const count = targets.length;
+      const entries = new Set(targets.map(({ entry }) => entry.id)).size;
+      fields.querySelector("[data-scope-details]").hidden = count < 2;
+      fields.querySelector("[data-scope-count]").textContent = `${count} ${noun}s in ${entries} ${entries === 1 ? "entry" : "entries"}.`;
+      const remove = fields.querySelector('button[value="remove"]');
+      if (remove) remove.textContent = count > 1 ? `Remove ${count} matching ${noun}s` : `Remove ${noun}`;
+      const selection = fields.querySelector('button[value="selection"]');
+      if (selection) selection.disabled = !["single", "text"].includes(selector.value);
+    });
+  }
+
   function editText(index, add) {
     const entry = currentEntry();
     const block = add ? null : entry.blocks[index];
@@ -109,33 +185,37 @@
     if (!formats.some(([value]) => value === format)) formats.push([format, "Current style"]);
     if (add) formats.push(["image", "Image"]);
     const otherEntries = state.entries.filter((item) => item !== entry).map(({ id, title }) => [id, title]);
+    const scopes = add ? new Map() : editScope(entry, index);
     open(add ? "Add a block" : "Edit preview block", `
       <label>Format <select name="format">${displayOptions(formats, format)}</select></label>
       <label id="editTextField">Text <textarea name="text" rows="6" dir="auto" required>${escapeHtml(block?.text || "")}</textarea></label>
       ${isSection ? `<label>Player edition <select name="visibility">${displayOptions([["default", "Follow section rule"], ["include", "Include this section"], ["exclude", "Hide this section"]], block[sectionVisibility] || "default")}</select></label>
         ${otherEntries.length ? `<label>Move section to <select name="destination">${displayOptions([["", "Keep in this entry"], ...otherEntries], "")}</select></label>` : ""}` : ""}
+      ${scopeField(scopes, block?.type === "paragraph")}
       <div class="book-edit-actions">
         <button type="submit" value="save">${add ? "Add block" : "Save edits"}</button>
         ${block?.type === "paragraph" ? '<button type="submit" value="selection">Format selected text</button>' : ""}
         ${!add ? '<button type="submit" value="remove" formnovalidate>Remove block</button>' : ""}
       </div>`, (command) => {
+      const scope = form.elements.scope?.value || "single";
+      if (scope !== "single") {
+        editMatchingText(scopes.get(scope).targets, block, command);
+        return;
+      }
       const selected = form.elements.format.value;
       if (selected === "image") { editImage(index, true); return; }
       const textField = form.elements.text;
       const value = textField.value;
       if (command !== "remove" && !value.trim()) throw new Error("Enter some text.");
-      const makeBlock = (text, type) => /^h[1-6]$/.test(type)
-        ? { type: "heading", level: Number(type[1]), text: text.trim().replace(/\s*\n\s*/g, " ") }
-        : { type: "paragraph", text: text.trim(), ...(type !== "paragraph" && { style: type }) };
       let replacement = [];
       if (command === "selection") {
         const { selectionStart: start, selectionEnd: end } = textField;
         if (!value.slice(start, end).trim()) throw new Error("Select the words to format in the text field.");
         replacement = [value.slice(0, start), value.slice(start, end), value.slice(end)]
-          .flatMap((part, partIndex) => part.trim() ? [makeBlock(part, partIndex === 1 ? selected : format)] : []);
+          .flatMap((part, partIndex) => part.trim() ? [formatTextBlock(part, partIndex === 1 ? selected : format)] : []);
       } else if (command !== "remove") {
-        replacement = /^h/.test(selected) ? [makeBlock(value, selected)]
-          : value.split(/\n\s*\n/).map((text) => makeBlock(text, selected)).filter(({ text }) => text);
+        replacement = /^h[1-6]$/.test(selected) ? [formatTextBlock(value, selected)]
+          : value.split(/\n\s*\n/).filter((text) => text.trim()).map((text) => formatTextBlock(text, selected));
       }
       const visibility = form.elements.visibility?.value;
       if (visibility && replacement[0]?.level === 3) replacement[0][sectionVisibility] = visibility;
@@ -168,12 +248,86 @@
       }
       save(entries, "Preview updated.");
     });
+    wireScope(scopes, "block");
     const selector = form.elements.format;
     selector.addEventListener("change", () => {
       const image = selector.value === "image";
       $("#editTextField").hidden = image;
       form.elements.text.required = !image;
     });
+  }
+
+  function editMatchingText(targets, selected, command) {
+    const controls = form.elements;
+    const replacements = new Map();
+    const headingChanges = new Map();
+    const destination = command === "save" && controls.destination?.value;
+    const visibility = controls.visibility?.value;
+    const updateVisibility = visibility && visibility !== (selected[sectionVisibility] || "default");
+    const format = controls.format.value;
+    const changeFormat = format !== blockFormat(selected);
+    const replaceText = selected.type === "heading" || controls.replaceText?.checked;
+    const input = controls.text;
+    const text = input.value;
+    const entryLevel = entryHeadingLevel(state.config);
+    if (command !== "remove" && replaceText && !text.trim()) throw new Error("Enter some text.");
+    if (command === "selection" && !text.slice(input.selectionStart, input.selectionEnd).trim()) throw new Error("Select the words to format in the text field.");
+    if (command === "selection" && !replaceText && text !== selected.text) throw new Error("Use the original wording for selection formatting or choose to replace the text in every match.");
+    if (command === "save" && selected.type === "paragraph" && !changeFormat && !replaceText) throw new Error("Choose a different format or select the option to replace the text in every match.");
+    if (destination && format !== "h3") throw new Error("Keep H3 to move whole sections.");
+
+    function formatBlock(original, value, type) {
+      const updated = formatTextBlock(value, type);
+      if (updated.type === "heading") updated[sourceHeadingKey] = original[sourceHeadingKey];
+      if (updated.level === 3) updated[sectionVisibility] = updateVisibility ? visibility : original[sectionVisibility];
+      return updated;
+    }
+
+    for (const { block } of targets) {
+      if (command === "remove") {
+        replacements.set(block, []);
+        continue;
+      }
+      const targetFormat = changeFormat ? format : blockFormat(block);
+      const words = replaceText ? text : block.text;
+      const parts = command === "selection"
+        ? [text.slice(0, input.selectionStart), text.slice(input.selectionStart, input.selectionEnd), text.slice(input.selectionEnd)]
+          .flatMap((part, index) => part.trim() ? [formatBlock(block, part, index === 1 ? format : blockFormat(block))] : [])
+        : /^h[1-6]$/.test(targetFormat) ? [formatBlock(block, words, targetFormat)]
+          : words.split(/\n\s*\n/).filter((part) => part.trim()).map((part) => formatBlock(block, part, targetFormat));
+      if (parts.length && block[sourceArtifact]) parts[0][sourceArtifact] = block[sourceArtifact];
+      for (const [index, part] of parts.entries()) {
+        if (part.type !== "heading" || part.level !== entryLevel && (index !== 0 || block.level !== entryLevel)) continue;
+        const before = block.type === "heading" && index === 0 ? block : { ...part, level: entryLevel === 1 ? 2 : 1 };
+        headingChanges.set(before, { title: part.text, level: part.level, block: part });
+        parts[index] = before;
+      }
+      replacements.set(block, parts);
+    }
+
+    const moved = [];
+    if (destination) for (const { entry, index, block } of targets) {
+      if (entry.id === destination) continue;
+      const children = entry.blocks.slice(index + 1, sectionEnd(entry.blocks, index));
+      moved.push(...replacements.get(block), ...children);
+      for (const item of [block, ...children]) replacements.set(item, []);
+    }
+    let entries = state.entries.map((entry) => ({ ...entry, blocks: [
+      ...entry.blocks.flatMap((block) => replacements.get(block) || [block]), ...(entry.id === destination ? moved : [])
+    ] }));
+    if (headingChanges.size) entries = regroupEditedHeadings(headingChanges, entries);
+    save(entries, `${command === "remove" ? "Removed" : "Updated"} ${targets.length} matching blocks.`);
+  }
+
+  function blockFormat(block) {
+    return block.type === "heading" ? `h${block.level}` : block.style || "paragraph";
+  }
+
+  function formatTextBlock(text, format) {
+    const trimmed = text.trim();
+    return /^h[1-6]$/.test(format)
+      ? { type: "heading", level: Number(format[1]), text: trimmed.replace(/\s*\n\s*/g, " ") }
+      : { type: "paragraph", text: trimmed, ...(format !== "paragraph" && { style: format }) };
   }
 
   function editImage(index, add = false) {
@@ -185,14 +339,17 @@
     const imageSource = recovered?.url || asset?.src || "";
     const editableUrl = recovered ? "" : asset?.src || "";
     const width = /^\d+(?:\.\d+)?%$/.test(block?.width || "") ? block.width.slice(0, -1) : "";
+    const scopes = add ? new Map() : editScope(entry, index);
+    const initialCaption = recovered?.caption ?? block?.caption ?? defaultAlt;
+    const initialAlt = block?.alt ?? defaultAlt;
     open(add ? "Add an image" : "Edit image", `
       <div class="book-edit-grid">
         <label>Image URL <input name="url" value="${escapeAttribute(editableUrl)}" placeholder="https://…" spellcheck="false"></label>
         <label>Upload replacement <input name="upload" type="file" accept="image/*"></label>
         <label>PNG filename <input name="fileName" value="${escapeAttribute(recovered?.fileName || "")}" placeholder="Enter a name to bundle the image"></label>
         <label>Width (%) <input name="width" type="number" min="1" max="100" step="any" value="${width}"></label>
-        <label>Caption <input name="caption" dir="auto" value="${escapeAttribute(recovered?.caption ?? block?.caption ?? defaultAlt)}"></label>
-        <label>Alt text <input name="alt" dir="auto" value="${escapeAttribute(block?.alt ?? defaultAlt)}"></label>
+        <label>Caption <input name="caption" dir="auto" value="${escapeAttribute(initialCaption)}"></label>
+        <label>Alt text <input name="alt" dir="auto" value="${escapeAttribute(initialAlt)}"></label>
         <label>Position <select name="position">${displayOptions([["same", "Keep position"], ["above", "Move up one block"], ["below", "Move down one block"], ["top", "Start of entry"], ["bottom", "End of entry"]], "same")}</select></label>
       </div>
       <details><summary>Crop image</summary><label class="book-edit-check"><input type="checkbox" name="crop"> Apply crop on save</label>
@@ -200,11 +357,20 @@
         <div id="editCropStage" class="book-crop-stage" hidden><img id="editCropImage" alt="Image to crop" draggable="false"><div id="editCropOutline" hidden></div></div>
         <div class="book-edit-grid">${[["x", "Left", 0], ["y", "Top", 0], ["w", "Width", 100], ["h", "Height", 100]].map(([name, label, value]) => `<label>${label} (%) <input name="${name}" type="number" min="0" max="100" step="any" value="${value}"></label>`).join("")}</div>
       </details>
+      ${scopeField(scopes)}
       <div class="book-edit-actions"><button type="submit" value="save">${add ? "Add image" : "Save image"}</button>${add ? "" : '<button type="submit" value="remove" formnovalidate>Remove image</button>'}</div>`, async (command, isCurrent) => {
+      const scope = form.elements.scope?.value || "single";
       const blocks = [...entry.blocks];
       if (command === "remove") {
-        blocks.splice(index, 1);
-        save(withBlocks(entry, blocks), "Image removed.");
+        const targets = new Set(scopes.get(scope).targets.map(({ block }) => block));
+        for (const image of targets) {
+          const key = image[imageSlotContext]?.key;
+          const recovered = state.recoveredImages.get(key);
+          if (recovered) URL.revokeObjectURL(recovered.url);
+          state.recoveredImages.delete(key);
+        }
+        save(state.entries.map((entry) => ({ ...entry, blocks: entry.blocks.filter((block) => !targets.has(block)) })),
+          targets.size > 1 ? `Removed ${targets.size} matching images.` : "Image removed.");
         return;
       }
       const input = form.elements;
@@ -222,6 +388,16 @@
       const newWidth = input.width.value ? `${input.width.value}%` : width ? undefined : block?.width;
       const position = input.position.value;
       const enteredName = input.fileName.value.trim();
+      if (scope !== "single") {
+        await editMatchingImages(scopes.get(scope).targets, {
+          url: url !== editableUrl ? url : undefined, file, crop, position,
+          width: input.width.value !== width ? newWidth : undefined, clearWidth: !input.width.value && Boolean(width),
+          caption: caption !== initialCaption.trim() ? caption : undefined,
+          alt: alt !== initialAlt.trim() ? alt : undefined,
+          fileName: enteredName && enteredName !== recovered?.fileName ? enteredName : undefined
+        }, isCurrent);
+        return;
+      }
       const requestedName = enteredName || file?.name || recovered?.fileName || alt || "image";
       const bundleLink = url && enteredName && enteredName !== recovered?.fileName;
       const blob = file || crop || bundleLink ? await makeImagePng(file || (url && url !== editableUrl ? url : imageSource || url), crop)
@@ -246,7 +422,84 @@
       blocks.splice(positions[position], 0, image);
       save(withBlocks(entry, blocks), "Image updated.");
     });
+    wireScope(scopes, "image");
     wireCropPreview(imageSource, editableUrl);
+  }
+
+  async function editMatchingImages(targets, changes, isCurrent) {
+    const assets = new Map(state.bookPackage.assets.map((asset) => [asset.id, asset]));
+    const pending = [];
+    const conversions = new Map();
+    if (changes.url === "" && !changes.file) throw new Error("Choose an image file or enter a replacement URL.");
+    for (const { block } of targets) {
+      const recovery = state.previewImages.get(block);
+      const original = assets.get(block.assetId);
+      const source = changes.file || changes.url || recovery?.blob || original?.src;
+      let blob = changes.url ? null : recovery?.blob;
+      if (changes.file || changes.crop || changes.fileName && !blob) {
+        try {
+          if (!conversions.has(source)) conversions.set(source, await makeImagePng(source, changes.crop));
+          blob = conversions.get(source);
+        } catch (error) {
+          throw new Error(`Could not edit every match. ${error.message}`);
+        }
+        if (!isCurrent()) return;
+      }
+      pending.push({ block, original, recovery, blob });
+    }
+    if (!isCurrent()) return;
+
+    const updates = new Map();
+    for (const { block, original, recovery, blob } of pending) {
+      const image = { ...block };
+      const alt = changes.alt ?? block.alt ?? original?.alt ?? "";
+      const caption = changes.caption ?? recovery?.caption ?? block.caption ?? original?.alt ?? "";
+      if (changes.alt !== undefined) image.alt = alt;
+      if (changes.caption !== undefined || changes.url && recovery) image.caption = caption;
+      if (changes.clearWidth || changes.width !== undefined) image.width = changes.width;
+      if (changes.position !== "same") {
+        image.placement = "inline";
+        delete image.className;
+      }
+      if (changes.url) image.assetId = ensureAsset(changes.url, alt, block.role);
+      const context = image[imageSlotContext] ||= { key: `edited-image-${++editedImageId}`, page: null, before: "", after: "", caption: "" };
+      if (blob) {
+        const suggested = changes.fileName || recovery?.fileName || changes.file?.name || alt || "image";
+        const fileName = pngName(suggested, context.key);
+        const url = blob === recovery?.blob ? recovery.url : URL.createObjectURL(blob);
+        if (recovery && url !== recovery.url) URL.revokeObjectURL(recovery.url);
+        state.recoveredImages.set(context.key, { ...recovery, blob, fileName, caption, url });
+      } else if (recovery) {
+        URL.revokeObjectURL(recovery.url);
+        state.recoveredImages.delete(context.key);
+      }
+      updates.set(block, image);
+    }
+    const moved = new Set(updates.values());
+    const entries = state.entries.map((entry) => {
+      const blocks = entry.blocks.map((block) => updates.get(block) || block);
+      return { ...entry, blocks: positionImages(blocks, moved, changes.position) };
+    });
+    save(entries, `Updated ${targets.length} matching images.`);
+  }
+
+  function positionImages(blocks, moved, position) {
+    if (position === "same") return blocks;
+    const first = blocks[0]?.type === "heading" && blocks[0].level === entryHeadingLevel(state.config) ? 1 : 0;
+    if (position === "top" || position === "bottom") {
+      const images = blocks.filter((block) => moved.has(block));
+      const remaining = blocks.filter((block) => !moved.has(block));
+      remaining.splice(position === "top" ? first : remaining.length, 0, ...images);
+      return remaining;
+    }
+    const step = position === "above" ? -1 : 1;
+    let index = step < 0 ? first + 1 : blocks.length - 2;
+    for (; index >= first && index < blocks.length; index -= step) {
+      const next = index + step;
+      if (next < first || next >= blocks.length || !moved.has(blocks[index]) || moved.has(blocks[next])) continue;
+      [blocks[index], blocks[next]] = [blocks[next], blocks[index]];
+    }
+    return blocks;
   }
 
   function wireCropPreview(source, originalUrl) {
