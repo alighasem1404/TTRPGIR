@@ -218,7 +218,9 @@
     const viewport = attachment?.viewport;
     highlight.hidden = !active || !viewport || active.number !== attachment.page;
     if (highlight.hidden) return;
-    const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(active.bounds);
+    const [minX, minY, maxX, maxY] = active.bounds;
+    const [x1, y1] = viewport.convertToViewportPoint(minX, minY);
+    const [x2, y2] = viewport.convertToViewportPoint(maxX, maxY);
     const clamp = (value, max) => Math.min(max, Math.max(0, value));
     const left = clamp(Math.min(x1, x2), canvas.width);
     const top = clamp(Math.min(y1, y2), canvas.height);
