@@ -12,9 +12,9 @@ The local tools are intentionally separated:
 
 ## Book ZIP
 
-Book Maker exports a ZIP once a replacement image has been applied. The archive contains `book.json` at the top level and the recovered PNGs in `images/`. Each recovered asset points to its file with an archive-relative path such as `images/moonlit-market.png`. Original asset URLs still apply to figures without replacements.
+Book Maker exports a ZIP once a replacement image has been applied. The archive contains `book.json` at the top level and the recovered WebP files in `images/`. Each recovered asset points to its file with an archive-relative path such as `images/moonlit-market.webp`. Original asset URLs still apply to figures without replacements.
 
-Open the ZIP directly in the Reader to use its bundled PNGs offline. Any original image URLs that point to the web still need a network connection. You can also extract the ZIP to reuse the PNG files separately. The archive uses the existing Book JSON v1 schema.
+Open the ZIP directly in the Reader to use its bundled images offline. The Reader also accepts older ZIPs with bundled PNG images. Any original image URLs that point to the web still need a network connection. You can extract the ZIP to reuse the image files separately. The archive uses the existing Book JSON v1 schema.
 
 ## Responsibilities
 

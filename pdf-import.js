@@ -2,6 +2,7 @@
   const script = document.currentScript;
   const distribution = new URL(script.dataset.pdfEngine, script.src).href;
   const build = distribution + "legacy/build/";
+  const { encodeWebp } = window.bookArchive;
   const byId = (id) => document.getElementById(id);
   const dialog = byId("pdfInspector");
   const canvas = byId("pdfPageCanvas");
@@ -173,7 +174,7 @@
         signal.throwIfAborted();
         const candidate = candidates.find((image) => image.index === index);
         if (!candidate) throw new Error("The embedded image is unavailable.");
-        return pngBlob(imageCanvas(candidate, current.pdfjs.ImageKind));
+        return encodeWebp(imageCanvas(candidate, current.pdfjs.ImageKind));
       })
     };
   }
@@ -240,11 +241,11 @@
   async function chooseReplacement(surface, page, label, bounds) {
     const picker = replacementPicker;
     try {
-      const blob = await pngBlob(surface);
+      const blob = await encodeWebp(surface);
       if (!picker || replacementPicker !== picker) return;
       picker({ blob, page, label, bounds });
-    } catch {
-      if (picker && replacementPicker === picker) pageStatus.textContent = "This image could not be prepared. Try another image or a crop.";
+    } catch (error) {
+      if (picker && replacementPicker === picker) pageStatus.textContent = error.message;
     }
   }
 
@@ -277,7 +278,7 @@
       const viewport = page.getViewport({ scale: Math.min(3, 2200 / Math.max(natural.width, natural.height)) });
       const rendered = makeCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
       const annotationMode = current.pdfjs.AnnotationMode.DISABLE;
-      current.render = page.render({ canvas: rendered, canvasContext: rendered.getContext("2d"), viewport, annotationMode });
+      current.render = page.render({ canvas: rendered, canvasContext: rendered.getContext("2d"), viewport, annotationMode, background: "transparent" });
       const [textResult, imageResult, renderResult] = await Promise.allSettled([
         page.getTextContent(),
         pageImages(page, current.pdfjs),
@@ -448,7 +449,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.append(thumbnail, `Download image ${index} (${source.width} × ${source.height})`);
-      button.addEventListener("click", () => downloadPng(imageCanvas(candidate, kinds), `page-${page}-image-${index}.png`));
+      button.addEventListener("click", () => downloadWebp(imageCanvas(candidate, kinds), `page-${page}-image-${index}.webp`));
       const use = document.createElement("button");
       use.type = "button";
       use.className = "pdf-use-image";
@@ -524,7 +525,7 @@
 
   function saveCrop() {
     const surface = cropCanvas();
-    if (surface) downloadPng(surface, `page-${attachment.page}-crop.png`);
+    if (surface) downloadWebp(surface, `page-${attachment.page}-crop.webp`);
   }
 
   function cropCanvas() {
@@ -538,16 +539,8 @@
     return surface;
   }
 
-  function pngBlob(surface) {
-    return new Promise((resolve, reject) => {
-      const fail = () => reject(new Error("The image could not be saved."));
-      if (!surface) return fail();
-      surface.toBlob((blob) => blob ? resolve(blob) : fail(), "image/png");
-    });
-  }
-
-  function downloadPng(surface, fileName) {
-    pngBlob(surface).then((blob) => {
+  function downloadWebp(surface, fileName) {
+    encodeWebp(surface).then((blob) => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

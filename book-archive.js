@@ -4,18 +4,29 @@
   const MAX_BOOK_BYTES = 32 * 1024 ** 2;
   const MAX_ARCHIVE_BYTES = 512 * 1024 ** 2;
   const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
-  const isImagePath = (path) => /^images\/[^/\\:\x00-\x1f]+\.png$/i.test(path);
+  const imagePath = (path) => /^images\/[^/\\:\x00-\x1f]+\.(webp|png)$/i.exec(path);
+  const WEBP_QUALITY = 0.85;
 
-  window.bookArchive = { create, open, reservedImagePaths, uniquePngName };
+  window.bookArchive = { create, open, reservedImagePaths, uniqueWebpName, encodeWebp };
 
-  function uniquePngName(value, taken) {
+  function encodeWebp(surface) {
+    if (!surface?.width || !surface.height) return Promise.reject(new Error("The image has no pixels to save."));
+    return new Promise((resolve, reject) => {
+      surface.toBlob((blob) => {
+        if (blob?.type === "image/webp") resolve(blob);
+        else reject(new Error("This browser could not encode WebP at the selected dimensions."));
+      }, "image/webp", WEBP_QUALITY);
+    });
+  }
+
+  function uniqueWebpName(value, taken) {
     const normalized = value.normalize("NFKC").trim().replace(/\.(?:png|jpe?g|webp|gif|svg|bmp|tiff?|avif|heic|heif|ico)$/i, "")
       .toLowerCase().replace(/[^\p{L}\p{N}\p{M}_-]+/gu, "-").replace(/^[-_]+|[-_]+$/g, "");
     const base = [...normalized].slice(0, 80).join("");
     if (!/[\p{L}\p{N}]/u.test(base)) return "";
     const stem = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base) ? `image-${base}` : base;
-    let fileName = `${stem}.png`;
-    for (let suffix = 2; taken.has(fileName); suffix += 1) fileName = `${stem}-${suffix}.png`;
+    let fileName = `${stem}.webp`;
+    for (let suffix = 2; taken.has(fileName); suffix += 1) fileName = `${stem}-${suffix}.webp`;
     return fileName;
   }
 
@@ -27,7 +38,7 @@
         const url = new URL(src, root);
         if (url.origin !== root.origin || !url.pathname.startsWith(root.pathname)) continue;
         const path = decodeURIComponent(url.pathname.slice(root.pathname.length));
-        if (isImagePath(path)) paths.add(path.toLowerCase());
+        if (imagePath(path)) paths.add(path.toLowerCase());
       } catch {
         // A malformed source is still available to the normal image-link checker.
       }
@@ -75,10 +86,11 @@
         const original = originals.get(block.assetId);
         if (!original) throw new Error("A recovered image has no original asset record.");
         const name = recovery.fileName;
-        if (!isImagePath(`images/${name}`)) throw new Error("A recovered image has an invalid PNG filename.");
-        const basePath = `images/${name.slice(0, -4)}`;
+        const extension = imagePath(`images/${name}`)?.[1].toLowerCase();
+        if (!extension || recovery.blob.type !== `image/${extension}`) throw new Error("A replacement image's file type does not match its filename.");
+        const basePath = `images/${name.slice(0, -extension.length - 1)}`;
         let src = `images/${name}`;
-        for (let suffix = 2; reservedPaths.has(src.toLowerCase()); suffix += 1) src = `${basePath}-${suffix}.png`;
+        for (let suffix = 2; reservedPaths.has(src.toLowerCase()); suffix += 1) src = `${basePath}-${suffix}.${extension}`;
         reservedPaths.add(src.toLowerCase());
 
         const baseId = `${original.id}-recovered`;
@@ -111,14 +123,17 @@
 
     const images = new Map();
     let remaining = MAX_ARCHIVE_BYTES - json.size;
-    const paths = new Set(bookPackage.assets.map(({ src }) => src).filter(isImagePath));
+    const paths = new Set(bookPackage.assets.map(({ src }) => src).filter(imagePath));
     for (const path of paths) {
       const member = zip.file(path);
       if (!member) continue;
       if (member.unsafeOriginalName !== path) throw new Error(`Invalid path for ${path}.`);
-      const image = await readEntry(member, remaining, signal, "image/png");
-      const prefix = new Uint8Array(await image.slice(0, PNG_SIGNATURE.length).arrayBuffer());
-      if (!PNG_SIGNATURE.every((byte, index) => prefix[index] === byte)) throw new Error(`Invalid PNG file at ${path}.`);
+      const extension = imagePath(path)[1].toLowerCase();
+      const image = await readEntry(member, remaining, signal, `image/${extension}`);
+      const prefix = new Uint8Array(await image.slice(0, 12).arrayBuffer());
+      const validSignature = extension === "png" ? PNG_SIGNATURE.every((byte, index) => prefix[index] === byte)
+        : String.fromCharCode(...prefix.slice(0, 4)) === "RIFF" && String.fromCharCode(...prefix.slice(8)) === "WEBP";
+      if (!validSignature) throw new Error(`Invalid ${extension.toUpperCase()} file at ${path}.`);
       remaining -= image.size;
       images.set(path, image);
     }

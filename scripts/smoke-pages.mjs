@@ -105,13 +105,17 @@ async function smoke(width) {
       !document.getElementById("recoverySetup").hidden, "Book-wide filename choice");
     await maker.evaluate(() => document.getElementById("recoverySetup").requestSubmit());
     await maker.until(() => !document.getElementById("applyRecovery").disabled, "Strong match prefilled");
-    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "lantern-at-the-harbor.png");
+    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "lantern-at-the-harbor.webp");
+    await maker.until(() => Boolean(document.querySelector("#pdfImages button")), "Embedded image download ready");
+    const extraction = await inspectPdfDownload(maker, false);
+    assert.deepEqual(extraction, { filename: "page-1-image-1.webp", type: "image/webp", width: 16, height: 16,
+      alpha: [0, 128, 255], lossy: true });
     await maker.evaluate(() => {
       document.getElementById("recoveryPageNumber").value = 2;
       document.getElementById("jumpRecoveryPage").requestSubmit();
     });
     await maker.until(() => document.getElementById("recoveryPosition").textContent.includes("Markdown page 2"), "Jump to Markdown page");
-    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "lantern-at-the-harbor-2.png");
+    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "lantern-at-the-harbor-2.webp");
     await maker.evaluate(() => document.getElementById("previousRecovery").click());
     await maker.evaluate(() => document.getElementById("nextRecoveryPage").click());
     assert.match(await maker.evaluate(() => document.getElementById("recoveryPosition").textContent), /Markdown page 2/);
@@ -120,6 +124,11 @@ async function smoke(width) {
     await maker.evaluate(() => document.getElementById("pdfNext").click());
     await maker.until(() => document.getElementById("pdfPageNumber").value === "2" &&
       !document.getElementById("pdfPageBody").hidden, "Next PDF page");
+    const crop = await inspectPdfDownload(maker, true);
+    assert.equal(crop.filename, "page-2-crop.webp");
+    assert.equal(crop.type, "image/webp");
+    assert.ok(Math.abs(crop.width - 135) <= 2 && Math.abs(crop.height - 234) <= 2, "Crop keeps selected raster dimensions");
+    assert.equal(crop.alpha[0], 0, "Blank PDF areas stay transparent in crops");
     await maker.evaluate(() => {
       document.getElementById("pdfPageNumber").value = 1;
       document.getElementById("jumpPdfPage").requestSubmit();
@@ -136,13 +145,13 @@ async function smoke(width) {
       document.getElementById("recoverySetup").requestSubmit();
     });
     await maker.until(() => !document.getElementById("applyRecovery").disabled, "Nearest H3 match ready");
-    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "sample.png");
+    assert.equal(await maker.evaluate(() => document.getElementById("recoveryFileName").value), "sample.webp");
     await maker.evaluate(() => {
       document.getElementById("recoveryCaption").value = "Harbor Lantern";
       document.getElementById("recoveryForm").requestSubmit();
     });
     await maker.until(() => document.getElementById("recoveryPosition").textContent.includes("Image 2 of 2") &&
-      document.getElementById("recoveryFileName").value === "sample-2.png" &&
+      document.getElementById("recoveryFileName").value === "sample-2.webp" &&
       !document.getElementById("applyRecovery").disabled, "Next image and unique filename");
     await maker.evaluate(() => document.getElementById("viewRecoveredPreview").click());
     await maker.until(() => {
@@ -153,7 +162,7 @@ async function smoke(width) {
     }, "Preview renders the recovered Homebrewery image and omits positioning markup");
     await maker.evaluate(() => document.getElementById("openImageRecovery").click());
     await maker.until(() => !document.getElementById("applyRecovery").disabled &&
-      document.getElementById("recoveryFileName").value === "sample-2.png", "Naming persists on reopen");
+      document.getElementById("recoveryFileName").value === "sample-2.webp", "Naming persists on reopen");
     await maker.evaluate(() => {
       document.getElementById("recoveryForm").requestSubmit();
       document.getElementById("imageRecovery").close();
@@ -177,6 +186,24 @@ async function smoke(width) {
       return images.length === 2 && images.every((image) => image.naturalWidth === 16) && images[0].alt === "Harbor Lantern" &&
         document.getElementById("currentLabel").textContent === "Lantern at the Harbor";
     }, "Reader renders both recovered images");
+    const legacy = await reader.evaluate(async () => {
+      const book = structuredClone(readerState.bookPackage);
+      const zip = new JSZip();
+      for (const asset of book.assets.filter(({ src }) => src.endsWith(".webp"))) {
+        asset.src = asset.src.replace(/\.webp$/, ".png");
+        const image = document.createElement("canvas");
+        image.width = image.height = 12;
+        const png = await new Promise((resolve) => image.toBlob(resolve, "image/png"));
+        zip.file(asset.src, await png.arrayBuffer());
+      }
+      zip.file("book.json", JSON.stringify(book));
+      return [...await zip.generateAsync({ type: "uint8array" })];
+    });
+    await reader.upload("jsonInput", "older-png-book.zip", legacy);
+    await reader.until(() => {
+      const images = [...document.querySelectorAll(".page-content img[src^='blob:']")];
+      return images.length === 2 && images.every((image) => image.naturalWidth === 12);
+    }, "Reader still renders original ZIPs containing PNGs");
     for (const request of maker.requests) {
       assert.ok(["GET", "HEAD"].includes(request.method) && !request.hasPostData, "No file upload request");
       assert.doesNotMatch(request.url, /local-source-smoke/);
@@ -189,6 +216,58 @@ async function smoke(width) {
   } finally {
     browser.close();
   }
+}
+
+async function inspectPdfDownload(maker, crop) {
+  return maker.evaluate(async (crop) => {
+    const createURL = URL.createObjectURL;
+    const click = HTMLAnchorElement.prototype.click;
+    let blob;
+    let timer;
+    try {
+      const filename = await new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(document.getElementById("pdfPageStatus").textContent || "PDF download missing.")), 6000);
+        URL.createObjectURL = (value) => { blob = value; return createURL.call(URL, value); };
+        HTMLAnchorElement.prototype.click = function () { resolve(this.download); };
+        if (!crop) {
+          document.querySelector('#pdfImages button').click();
+          return;
+        }
+        document.getElementById("pdfCrop").click();
+        const canvas = document.getElementById("pdfPageCanvas");
+        const rect = canvas.getBoundingClientRect();
+        canvas.setPointerCapture = () => {}; // No native pointer is held for these synthetic events.
+        for (const [type, ratio] of [["pointerdown", 0.1], ["pointerup", 0.25]]) {
+          canvas.dispatchEvent(new PointerEvent(type, {
+            isPrimary: true, pointerId: 1, button: 0, clientX: rect.left + rect.width * ratio, clientY: rect.top + rect.height * ratio
+          }));
+        }
+        delete canvas.setPointerCapture;
+        document.getElementById("pdfSaveCrop").click();
+      });
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const view = new DataView(bytes.buffer);
+      let lossy = false;
+      for (let index = 12; index + 8 <= bytes.length;) {
+        if (String.fromCharCode(...bytes.subarray(index, index + 4)) === "VP8 ") lossy = true;
+        const length = view.getUint32(index + 4, true);
+        index += 8 + length + (length % 2);
+      }
+      const bitmap = await createImageBitmap(blob);
+      const sample = document.createElement("canvas");
+      sample.width = bitmap.width;
+      sample.height = bitmap.height;
+      const context = sample.getContext("2d");
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return { filename, type: blob.type, width: sample.width, height: sample.height, lossy,
+        alpha: [0, 7, 15].map((x) => context.getImageData(x, 0, 1, 1).data[3]) };
+    } finally {
+      clearTimeout(timer);
+      URL.createObjectURL = createURL;
+      HTMLAnchorElement.prototype.click = click;
+    }
+  }, crop);
 }
 
 async function smokeBulkEditing(browser, width) {
@@ -264,7 +343,7 @@ async function smokeBulkEditing(browser, width) {
       headings: book.entries.map((entry) => entry.blocks.find(({ level }) => level === 3).text),
       images: book.entries.map((entry) => entry.blocks.filter(({ type }) => type === "image").map((block) => ({ width: block.width, caption: block.caption, fileName: state.previewImages.get(block).fileName }))),
       urls: book.assets.map(({ src }) => src),
-      files: Object.keys(archive.files).filter((name) => name.endsWith(".png")),
+      files: Object.keys(archive.files).filter((name) => name.endsWith(".webp")),
     };
   });
   assert.deepEqual(result.text, [
@@ -272,10 +351,10 @@ async function smokeBulkEditing(browser, width) {
     [["Second sample wording.", "book-quote"], ["Shared callout wording.", "book-callout"]]
   ]);
   assert.deepEqual(result.headings, ["Excerpt", "Excerpt"]);
-  assert.deepEqual(result.images, [[{ width: "45%", caption: "Shared artwork caption", fileName: "shared-art.png" }],
-    [{ width: "45%", caption: "Shared artwork caption", fileName: "shared-art-2.png" }]]);
+  assert.deepEqual(result.images, [[{ width: "45%", caption: "Shared artwork caption", fileName: "shared-art.webp" }],
+    [{ width: "45%", caption: "Shared artwork caption", fileName: "shared-art-2.webp" }]]);
   assert.ok(result.urls.every((url) => !url.includes("backdrop")));
-  assert.deepEqual(result.files, ["images/shared-art.png", "images/shared-art-2.png"]);
+  assert.deepEqual(result.files, ["images/shared-art.webp", "images/shared-art-2.webp"]);
 }
 
 async function smokeBookEditing(browser, width) {
@@ -522,11 +601,13 @@ function fixturePdf() {
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Count 2 /Kids [3 0 R 7 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /Art 4 0 R >> /Font << /F1 5 0 R >> >> /Contents 6 0 R >>",
-    stream(Buffer.alloc(16 * 16 * 3, 95), "/Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceRGB /BitsPerComponent 8"),
+    stream(Buffer.alloc(16 * 16 * 3, 95), "/Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 9 0 R"),
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     stream("q 80 0 0 80 40 40 cm /Art Do Q\nBT /F1 12 Tf 40 24 Td (Figure 1 Harbor Lantern) Tj ET"),
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 520] /Resources << /Font << /F1 5 0 R >> >> /Contents 8 0 R >>",
-    stream("BT /F1 12 Tf 40 24 Td (Interlude) Tj ET")
+    stream("BT /F1 12 Tf 40 24 Td (Interlude) Tj ET"),
+    stream(Buffer.from(Array.from({ length: 16 * 16 }, (_, index) => index % 16 < 5 ? 0 : index % 16 < 10 ? 128 : 255)),
+      "/Type /XObject /Subtype /Image /Width 16 /Height 16 /ColorSpace /DeviceGray /BitsPerComponent 8")
   ];
   const parts = [Buffer.from("%PDF-1.4\n")];
   const offsets = ["0000000000 65535 f \n"];

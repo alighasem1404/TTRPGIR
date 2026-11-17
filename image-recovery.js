@@ -1,6 +1,6 @@
 (() => {
   const byId = (id) => document.getElementById(id);
-  const uniqueFileName = window.bookArchive.uniquePngName;
+  const uniqueFileName = window.bookArchive.uniqueWebpName;
   const dialog = byId("imageRecovery");
   const openButton = byId("openImageRecovery");
   const status = byId("recoveryStatus");

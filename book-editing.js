@@ -346,7 +346,7 @@
       <div class="book-edit-grid">
         <label>Image URL <input name="url" value="${escapeAttribute(editableUrl)}" placeholder="https://…" spellcheck="false"></label>
         <label>Upload replacement <input name="upload" type="file" accept="image/*"></label>
-        <label>PNG filename <input name="fileName" value="${escapeAttribute(recovered?.fileName || "")}" placeholder="Enter a name to bundle the image"></label>
+        <label>WebP filename <input name="fileName" value="${escapeAttribute(recovered?.fileName || "")}" placeholder="Enter a name to bundle the image"></label>
         <label>Width (%) <input name="width" type="number" min="1" max="100" step="any" value="${width}"></label>
         <label>Caption <input name="caption" dir="auto" value="${escapeAttribute(initialCaption)}"></label>
         <label>Alt text <input name="alt" dir="auto" value="${escapeAttribute(initialAlt)}"></label>
@@ -400,7 +400,7 @@
       }
       const requestedName = enteredName || file?.name || recovered?.fileName || alt || "image";
       const bundleLink = url && enteredName && enteredName !== recovered?.fileName;
-      const blob = file || crop || bundleLink ? await makeImagePng(file || (url && url !== editableUrl ? url : imageSource || url), crop)
+      const blob = file || crop || bundleLink ? await makeImageWebp(file || (url && url !== editableUrl ? url : imageSource || url), crop)
         : !url && recovered ? recovered.blob : null;
       if (!isCurrent()) return;
       const image = { ...block, type: "image", role, placement: position === "same" ? block?.placement || "inline" : "inline", width: newWidth, caption, alt };
@@ -409,7 +409,7 @@
       const oldKey = block?.[imageSlotContext]?.key;
       const context = image[imageSlotContext] ||= { key: `edited-image-${++editedImageId}`, page: null, before: "", after: "", caption: "" };
       if (blob) {
-        const fileName = pngName(requestedName, oldKey);
+        const fileName = webpName(requestedName, oldKey);
         if (recovered) URL.revokeObjectURL(recovered.url);
         state.recoveredImages.set(context.key, { ...recovered, blob, fileName, caption, url: URL.createObjectURL(blob) });
       } else if (recovered) {
@@ -438,7 +438,7 @@
       let blob = changes.url ? null : recovery?.blob;
       if (changes.file || changes.crop || changes.fileName && !blob) {
         try {
-          if (!conversions.has(source)) conversions.set(source, await makeImagePng(source, changes.crop));
+          if (!conversions.has(source)) conversions.set(source, await makeImageWebp(source, changes.crop));
           blob = conversions.get(source);
         } catch (error) {
           throw new Error(`Could not edit every match. ${error.message}`);
@@ -465,7 +465,7 @@
       const context = image[imageSlotContext] ||= { key: `edited-image-${++editedImageId}`, page: null, before: "", after: "", caption: "" };
       if (blob) {
         const suggested = changes.fileName || recovery?.fileName || changes.file?.name || alt || "image";
-        const fileName = pngName(suggested, context.key);
+        const fileName = webpName(suggested, context.key);
         const url = blob === recovery?.blob ? recovery.url : URL.createObjectURL(blob);
         if (recovery && url !== recovery.url) URL.revokeObjectURL(recovery.url);
         state.recoveredImages.set(context.key, { ...recovery, blob, fileName, caption, url });
@@ -566,7 +566,7 @@
     catch { return false; }
   }
 
-  async function makeImagePng(source, crop) {
+  async function makeImageWebp(source, crop) {
     let image;
     let temporary;
     try {
@@ -581,12 +581,11 @@
       const [x, y, w, h] = crop || [0, 0, 100, 100];
       const [left, top, width, height] = [x * image.naturalWidth / 100, y * image.naturalHeight / 100,
         w * image.naturalWidth / 100, h * image.naturalHeight / 100];
-      const scale = Math.min(1, 4096 / Math.max(width, height));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(width * scale));
-      canvas.height = Math.max(1, Math.round(height * scale));
+      canvas.width = Math.max(1, Math.round(width));
+      canvas.height = Math.max(1, Math.round(height));
       canvas.getContext("2d").drawImage(image, left, top, width, height, 0, 0, canvas.width, canvas.height);
-      return await new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not create a PNG.")), "image/png"));
+      return window.bookArchive.encodeWebp(canvas);
     } catch {
       throw new Error("Could not read this image for cropping or export. Upload the image file if the host blocks access.");
     } finally {
@@ -601,11 +600,11 @@
     return id;
   }
 
-  function pngName(value, except) {
-    const { uniquePngName, reservedImagePaths } = window.bookArchive;
+  function webpName(value, except) {
+    const { uniqueWebpName, reservedImagePaths } = window.bookArchive;
     const used = new Set([...reservedImagePaths(state.bookPackage.assets)].map((path) => path.slice("images/".length)));
     for (const [key, image] of state.recoveredImages) if (key !== except) used.add(image.fileName.toLowerCase());
-    return uniquePngName(value, used) || uniquePngName("image", used);
+    return uniqueWebpName(value, used) || uniqueWebpName("image", used);
   }
 
   function sectionEnd(blocks, index) {
