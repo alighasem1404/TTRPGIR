@@ -1,5 +1,6 @@
 (() => {
   const byId = (id) => document.getElementById(id);
+  const uniqueFileName = window.bookArchive.uniquePngName;
   const dialog = byId("imageRecovery");
   const openButton = byId("openImageRecovery");
   const status = byId("recoveryStatus");
@@ -23,6 +24,7 @@
 
   window.imageRecovery = {
     openReview,
+    invalidate() { result = null; },
     setPdfAttached(attached) {
       openButton.hidden = !attached;
       if (!attached) reset();
@@ -292,7 +294,7 @@
       showDraft(image);
     }, () => { current.browsed = true; });
     const position = sourcePage(slot);
-    const location = result.hasPages ? `Markdown page ${position}` : `Entry ${position}`;
+    const location = result.hasPages && position ? `Markdown page ${position}` : `Entry ${slot.entryIndex + 1}`;
     const tag = applied ? " · Applied" : skipped.has(slot.key) ? " · Skipped" : "";
     byId("recoveryPosition").textContent = `Image ${index + 1} of ${result.slots.length} · ${location}${tag}`;
     byId("previousRecovery").disabled = index === 0;
@@ -397,16 +399,6 @@
     return taken;
   }
 
-  function uniqueFileName(value, taken) {
-    const normalized = value.normalize("NFKC").trim().replace(/\.(?:png|jpe?g|webp|gif|svg|bmp|tiff?)$/i, "")
-      .toLowerCase().replace(/[^\p{L}\p{N}\p{M}_-]+/gu, "-").replace(/^[-_]+|[-_]+$/g, "");
-    const base = [...normalized].slice(0, 80).join("");
-    if (!/[\p{L}\p{N}]/u.test(base)) return "";
-    const stem = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base) ? `image-${base}` : base;
-    let fileName = `${stem}.png`;
-    for (let suffix = 2; taken.has(fileName); suffix += 1) fileName = `${stem}-${suffix}.png`;
-    return fileName;
-  }
 
   function normalizeText(value) {
     return value.normalize("NFKC").toLowerCase().replace(/[\u064A\u0649]/gu, "ی").replace(/\u0643/gu, "ک")

@@ -6,7 +6,18 @@
   const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
   const isImagePath = (path) => /^images\/[^/\\:\x00-\x1f]+\.png$/i.test(path);
 
-  window.bookArchive = { create, open, reservedImagePaths };
+  window.bookArchive = { create, open, reservedImagePaths, uniquePngName };
+
+  function uniquePngName(value, taken) {
+    const normalized = value.normalize("NFKC").trim().replace(/\.(?:png|jpe?g|webp|gif|svg|bmp|tiff?|avif|heic|heif|ico)$/i, "")
+      .toLowerCase().replace(/[^\p{L}\p{N}\p{M}_-]+/gu, "-").replace(/^[-_]+|[-_]+$/g, "");
+    const base = [...normalized].slice(0, 80).join("");
+    if (!/[\p{L}\p{N}]/u.test(base)) return "";
+    const stem = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base) ? `image-${base}` : base;
+    let fileName = `${stem}.png`;
+    for (let suffix = 2; taken.has(fileName); suffix += 1) fileName = `${stem}-${suffix}.png`;
+    return fileName;
+  }
 
   function reservedImagePaths(assets) {
     const root = new URL("https://book.invalid/package/");
@@ -78,7 +89,7 @@
         replacedIds.add(original.id);
         recovered.push({ ...original, id, src, alt: recovery.caption });
         files.set(src, recovery.blob);
-        return { ...block, assetId: id };
+        return { ...block, assetId: id, ...(block.caption !== undefined && { caption: recovery.caption }) };
       })
     }));
     const assets = book.assets.filter(({ id }) => !replacedIds.has(id) || referencedIds.has(id));

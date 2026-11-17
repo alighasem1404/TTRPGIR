@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=19" />
+    <link rel="stylesheet" href="styles.css?v=20" />
   </head>
   <body>
     <div class="app-shell maker-page">
@@ -51,6 +51,14 @@
               <button id="undoHeadings" type="button" disabled>Undo heading edit</button>
             </div>
             <div class="heading-actions">
+              <button id="organizeBook" type="button">Organize book</button>
+              <button id="editSectionRules" type="button">Section rules</button>
+              <button id="reviewSourceItems" type="button">Homebrewery items</button>
+            </div>
+            <label class="edition-field">Export edition
+              <select id="exportEdition"><option value="full">Full book</option><option value="player">Player edition</option></select>
+            </label>
+            <div class="heading-actions">
               <button id="attachPdf" type="button" disabled>Attach matching PDF</button>
               <button id="reviewPdf" type="button" hidden>Review PDF</button>
               <button id="openImageRecovery" type="button" hidden>Recover images</button>
@@ -76,6 +84,7 @@
           <div class="reader-toolbar">
             <div><span class="eyebrow">PACKAGE PREVIEW</span><strong id="currentLabel">Welcome</strong></div>
             <div class="page-controls">
+              <button id="toggleBookEditing" class="export-button" type="button" aria-pressed="false">Edit preview</button>
               <button id="previousButton" class="icon-button" type="button" aria-label="Previous content entry">←</button>
               <span><b id="currentPage">1</b><em>/</em><span id="totalPages">—</span></span>
               <button id="nextButton" class="icon-button" type="button" aria-label="Next content entry">→</button>
@@ -158,6 +167,10 @@
             <button id="applyHeadings" type="button">Apply changes</button>
           </div>
         </section>
+      </dialog>
+      <dialog id="bookEditing" aria-labelledby="bookEditingTitle">
+        <header class="pdf-toolbar"><h2 id="bookEditingTitle"></h2><form method="dialog"><button>Close</button></form></header>
+        <form id="bookEditingForm"><div id="bookEditingFields"></div><p id="bookEditingStatus" role="status"></p></form>
       </dialog>
       <dialog id="imageRecovery" aria-labelledby="imageRecoveryTitle">
         <div class="pdf-toolbar">
@@ -267,9 +280,10 @@
     </div>
     <script src="image-viewer.js?v=1"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
-    <script src="book-archive.js?v=1"></script>
-    <script src="app.js?v=16"></script>
+    <script src="book-archive.js?v=2"></script>
+    <script src="app.js?v=17"></script>
+    <script src="book-editing.js?v=1"></script>
     <script src="pdf-import.js?v=5" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
-    <script src="image-recovery.js?v=4"></script>
+    <script src="image-recovery.js?v=5"></script>
   </body>
 </html>

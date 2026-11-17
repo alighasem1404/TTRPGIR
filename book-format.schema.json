@@ -114,7 +114,7 @@
     "image": {
       "type": "object",
       "required": ["type", "assetId", "role", "placement"],
-      "properties": { "type": { "const": "image" }, "assetId": { "type": "string" }, "role": { "type": "string" }, "placement": { "enum": ["inline", "entry-top", "entry-top-right", "section-top", "asset-only"] }, "className": { "type": "string" }, "width": { "type": "string" } },
+      "properties": { "type": { "const": "image" }, "assetId": { "type": "string" }, "role": { "type": "string" }, "placement": { "enum": ["inline", "entry-top", "entry-top-right", "section-top", "asset-only"] }, "className": { "type": "string" }, "width": { "type": "string" }, "alt": { "type": "string" }, "caption": { "type": "string" } },
       "additionalProperties": false
     },
     "list": {

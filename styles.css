@@ -141,6 +141,42 @@ button { cursor: pointer; }
 #bookZipExport { width: min(450px, calc(100% - 24px)); }
 #bookZipExport h2 { margin: 0; color: var(--wine-dark); font: 24px Georgia, serif; }
 #bookZipExportStatus { overflow-wrap: anywhere; }
+.edition-field { display: grid; gap: 4px; margin: 8px 0; color: var(--ink); font-size: 12px; }
+.edition-field select { width: 100%; }
+#bookEditing { width: min(680px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 16px; border: 1px solid var(--gold-dark); border-radius: 8px; background: var(--parchment); color: var(--ink); }
+#bookEditing::backdrop { background: rgba(26, 14, 19, .75); }
+#bookEditingFields { display: grid; gap: 10px; }
+#bookEditing :is(input, select, textarea, button), .edition-field select, .book-block-actions button { font: inherit; color: var(--ink); border: 1px solid var(--gold-dark); border-radius: 4px; background: var(--parchment-light); }
+#bookEditing :is(input, select, textarea, button), .edition-field select { padding: 6px 8px; }
+#bookEditing :is(input, select, textarea):not([type="checkbox"]) { width: 100%; min-width: 0; }
+#bookEditing textarea { resize: vertical; }
+#bookEditing label { display: grid; gap: 4px; min-width: 0; }
+#bookEditing label.book-edit-check { display: flex; align-items: center; gap: 5px; }
+#bookEditing [hidden] { display: none; }
+#bookEditing button:disabled { opacity: .45; cursor: default; }
+#bookEditingStatus { margin: 8px 0 0; color: var(--wine-dark); }
+#bookEditingStatus:empty { display: none; }
+.book-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#bookEditing .book-edit-actions button[value="save"] { color: #fff3db; background: var(--wine-dark); }
+.book-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.book-crop-stage { position: relative; overflow: hidden; width: fit-content; max-width: 100%; margin: 0 auto 8px; }
+.book-crop-stage img { display: block; max-width: 100%; max-height: 240px; cursor: crosshair; touch-action: none; user-select: none; }
+#editCropOutline { position: absolute; border: 2px solid var(--wine-dark); outline: 1px solid white; box-shadow: 0 0 0 600px #2b1a2260; pointer-events: none; }
+.book-order-list, .book-source-list { padding: 0; margin: 0; list-style: none; }
+.book-order-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.book-order-list li[draggable] { cursor: grab; }
+.book-order-list li > span { flex: 1 1 36%; overflow-wrap: anywhere; }
+.book-source-list li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.book-source-list small { display: block; color: var(--ink-soft); }
+.book-edit-block { display: flow-root; margin-block: 4px; padding: 2px 5px; border: 1px solid transparent; }
+.book-edit-block[data-edit-block]:hover, .book-edit-block:focus-within { border-color: var(--gold-dark); }
+.book-block-actions { display: flex; gap: 5px; justify-content: flex-end; clear: both; }
+.book-block-actions button { padding: 3px 6px; font-size: 11px; }
+.page-content .book-quote, .page-content .book-callout { margin-block: 12px; padding: 8px 12px; border-inline-start: 3px solid var(--gold-dark); }
+.page-content .book-quote { font-style: italic; }
+.page-content .book-callout { background: var(--card); }
+.page-content .book-rule { border: 0; border-top: 1px solid var(--gold-dark); margin: 16px auto; width: 65%; }
+@media (max-width: 480px) { .book-edit-grid { grid-template-columns: minmax(0, 1fr); } }
 #bookZipExport #downloadBookZip { color: #fff3db; background: var(--wine-dark); }
 @media (max-width: 650px) { .pdf-page-layout { grid-template-columns: minmax(0, 1fr); } }
 .maker-inspector { background: #261a20; }

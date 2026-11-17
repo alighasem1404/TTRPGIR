@@ -101,10 +101,14 @@ function goToEntry(index) {
 
 function renderBlock(block, assets, entryIndex, blockIndex) {
   if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
-  if (block.type === "paragraph") return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${inlineMarkdown(block.text)}</p>`;
+  if (block.type === "paragraph") {
+    const text = inlineMarkdown(block.text);
+    if (block.style === "book-quote") return `<blockquote class="book-quote">${text}</blockquote>`;
+    return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${text}</p>`;
+  }
   if (block.type === "list") return `<ul>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`;
   if (block.type === "table") return `<table><thead><tr>${block.columns.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  if (block.type === "divider") return `<div class="column-marker" aria-hidden="true"></div>`;
+  if (block.type === "divider") return block.style === "rule" ? '<hr class="book-rule">' : `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {
     const original = assets.find((candidate) => candidate.id === block.assetId);
     if (!original) return "";
@@ -114,7 +118,9 @@ function renderBlock(block, assets, entryIndex, blockIndex) {
     const customClass = block.className ? ` ${block.className.replace(/[^a-z0-9_-]/gi, "")}` : "";
     const className = `${semanticClass}${placementClass}${customClass}`;
     const width = block.width ? ` style="width:${escapeAttribute(block.width)}"` : "";
-    return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(asset.alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(asset.alt)}" data-image-viewer tabindex="0" loading="lazy"></span><figcaption>${inlineMarkdown(asset.alt)}</figcaption></figure>`;
+    const alt = block.alt ?? asset.alt;
+    const caption = block.caption ?? asset.alt;
+    return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(alt)}" data-image-viewer tabindex="0" loading="lazy"></span>${caption ? `<figcaption>${inlineMarkdown(caption)}</figcaption>` : ""}</figure>`;
   }
   if (block.type === "embed" && block.kind === "video-grid") return `<section><h3>${inlineMarkdown(block.title)}</h3><div class="video-grid">${block.items.map((item, index) => `<a class="video-card" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer"><span class="image-frame image-frame--wide"><img src="${escapeAttribute(item.thumbnail)}" alt="${escapeAttribute(block.title)} video ${index + 1}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(block.title)} video ${index + 1}" data-image-viewer tabindex="0" loading="lazy"></span><span class="video-card-caption">Watch ${escapeHtml(block.title)} video ${index + 1} ↗</span></a>`).join("")}</div></section>`;
   return "";
@@ -169,7 +175,7 @@ function validateBookPackage(bookPackage) {
 
 function isReadableBlock(block) {
   if (!block || typeof block.type !== "string") return false;
-  if (block.type === "image") return !block.className || typeof block.className === "string";
+  if (block.type === "image") return [block.className, block.alt, block.caption].every((value) => value === undefined || typeof value === "string");
   if (block.type === "list") return Array.isArray(block.items);
   if (block.type === "table") return Array.isArray(block.columns) && Array.isArray(block.rows) && block.rows.every(Array.isArray);
   if (block.type === "embed" && block.kind === "video-grid") return Array.isArray(block.items) && block.items.every((item) => item && typeof item === "object");

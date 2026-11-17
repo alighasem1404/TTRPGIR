@@ -19,7 +19,7 @@ if (version !== pin[1] && !localTest) {
 }
 const files = [
   "index.html", "styles.css", "reader.js", "app.js", "image-viewer.js",
-  "book-archive.js", "image-recovery.js", "pdf-import.js", "book-format.schema.json",
+  "book-archive.js", "book-editing.js", "image-recovery.js", "pdf-import.js", "book-format.schema.json",
   "Test text/Euphoria Demo.txt", "books/euphoria-demo/conversion.json",
   "books/euphoria-demo/book.json", "books/euphoria-demo/book-fa.json",
   "vendor/jszip-3.10.1/jszip.min.js", "vendor/jszip-3.10.1/LICENSE.markdown"

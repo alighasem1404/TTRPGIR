@@ -184,9 +184,162 @@ async function smoke(width) {
         assert.ok(request.url.startsWith(pdfBase.href), "PDF.js requests stay under the project site");
       }
     }
+    await smokeBookEditing(browser, width);
   } finally {
     browser.close();
   }
+}
+
+async function smokeBookEditing(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Book editing demo");
+  await maker.upload("mdInput", "editing.md", [
+    "## Zeta Book", "### Description", "An editable sentence.", "", "![Books Image](missing-cover.png) {position:absolute}",
+    "{{note A converted note}}", "### Secret", "Keep this sentence private.", "", "![Secret Art](secret-art.png)",
+    "### Sample", "A sample of the writing.", "## Alpha Book", "### Secret", "An approved exception.",
+    "### Description", "Another description.", "![background](missing-decoration.png)"
+  ].join("\n"));
+  await maker.until(() => state.entries[0]?.title === "Zeta Book", "Editing fixture");
+  await maker.evaluate(() => {
+    const click = (id) => document.getElementById(id).click();
+    const form = document.getElementById("bookEditingForm");
+    const submit = (value = "save") => form.requestSubmit(form.querySelector(`button[value="${value}"]`));
+    click("toggleBookEditing");
+    [...document.querySelectorAll("[data-edit-block] p")].find((p) => p.textContent === "An editable sentence.").click();
+    form.elements.text.value = "Revised sentence.";
+    form.elements.format.value = "book-quote";
+    submit();
+    document.querySelector("[data-book-add='3']").click();
+    form.elements.text.value = "Remove this temporary paragraph.";
+    form.elements.format.value = "paragraph";
+    submit();
+    [...document.querySelectorAll("[data-edit-block] p")].find((p) => p.textContent === "Remove this temporary paragraph.").click();
+    submit("remove");
+
+    click("reviewSourceItems");
+    for (const label of document.querySelectorAll(".book-source-list label")) {
+      const name = label.firstElementChild.firstChild.textContent.trim();
+      label.querySelector("select").value = { "Books Image": "hide", note: "callout", background: "keep" }[name] || "";
+    }
+    submit();
+    click("editSectionRules");
+    const secret = [...document.querySelectorAll("#sectionRuleRows li")].find((row) => row.textContent.startsWith("Secret"));
+    secret.querySelector("input").click();
+    secret.querySelector("button[aria-label$=' up']").click();
+    submit();
+
+    click("organizeBook");
+    form.elements.scope.value = "sections";
+    form.elements.scope.dispatchEvent(new Event("change"));
+    const sample = [...document.querySelectorAll("#bookOrderRows li")].find((row) => row.textContent.startsWith("Sample"));
+    sample.querySelector("button[aria-label$=' up']").click();
+    form.elements.scope.value = "entries";
+    form.elements.scope.dispatchEvent(new Event("change"));
+    click("sortBookEntries");
+    submit();
+
+    const secretImage = [...document.querySelectorAll("#pageViewport [data-edit-block] img")].find((img) => img.alt === "Secret Art");
+    secretImage.click();
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 12;
+    const data = Uint8Array.from(atob(canvas.toDataURL().split(",")[1]), (char) => char.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([data], "private-art.png", { type: "image/png" }));
+    form.elements.upload.files = transfer.files;
+    form.elements.alt.value = "Private illustration";
+    form.elements.caption.value = "Private caption";
+    form.elements.width.value = "42";
+    form.elements.crop.checked = true;
+    form.elements.w.value = "50";
+    submit();
+  });
+  await maker.until(() => {
+    const image = document.querySelector('#pageViewport img[alt="Private illustration"]');
+    return !document.getElementById("bookEditing").open && image?.naturalWidth === 6;
+  }, "Uploaded image crop renders in preview");
+  const editions = await maker.evaluate(() => {
+    const button = (id) => document.getElementById(id);
+    const form = button("bookEditingForm");
+    const headings = () => [...document.querySelectorAll("#pageViewport h3")];
+    headings().find((heading) => heading.textContent === "Sample").click();
+    form.elements.destination.value = state.entries[0].id;
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    button("previousButton").click();
+    headings().find((heading) => heading.textContent === "Secret").click();
+    form.elements.visibility.value = "include";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    button("openHeadings").click();
+    const title = document.querySelector('input[aria-label="Title for H3 Sample"]');
+    title.value = "Excerpt";
+    title.dispatchEvent(new Event("input", { bubbles: true }));
+    button("previewHeadings").click();
+    button("applyHeadings").click();
+    button("toggleBookEditing").click();
+    const full = window.bookEditing.exportPackage();
+    button("exportEdition").value = "player";
+    button("exportEdition").dispatchEvent(new Event("change"));
+    const playerButton = button("exportButton").textContent;
+    const player = window.bookEditing.exportPackage();
+    button("exportEdition").value = "full";
+    button("exportEdition").dispatchEvent(new Event("change"));
+    return { full, player, playerButton };
+  });
+  assert.deepEqual(editions.full.entries.map(({ title }) => title), ["Alpha Book", "Zeta Book"]);
+  assert.ok(editions.full.entries[0].blocks.some(({ text }) => text === "A sample of the writing."));
+  assert.ok(editions.full.entries[0].blocks.some(({ text }) => text === "Excerpt"));
+  assert.ok(editions.full.entries[1].blocks.some(({ text, style }) => text === "Revised sentence." && style === "book-quote"));
+  assert.ok(editions.full.entries[1].blocks.some(({ text, style }) => text === "A converted note" && style === "book-callout"));
+  assert.ok(editions.full.assets.some(({ src }) => src === "missing-decoration.png"));
+  assert.ok(!editions.full.assets.some(({ src }) => src === "missing-cover.png"));
+  assert.equal(editions.playerButton, "Export JSON");
+  assert.ok(!JSON.stringify(editions.player).match(/Keep this sentence private|Private caption|secret-art\.png/));
+  assert.ok(JSON.stringify(editions.player).includes("An approved exception."));
+
+  const playerDownload = await maker.evaluate(async () => {
+    const edition = document.getElementById("exportEdition");
+    const exportButton = document.getElementById("exportButton");
+    const createURL = URL.createObjectURL;
+    const anchorClick = HTMLAnchorElement.prototype.click;
+    let blob, filename;
+    try {
+      URL.createObjectURL = (value) => { blob = value; return createURL.call(URL, value); };
+      HTMLAnchorElement.prototype.click = function () { filename = this.download; };
+      edition.value = "player";
+      edition.dispatchEvent(new Event("change"));
+      exportButton.click();
+      return { filename, book: JSON.parse(await blob.text()), visible: edition.getBoundingClientRect().width > 0 };
+    } finally {
+      URL.createObjectURL = createURL;
+      HTMLAnchorElement.prototype.click = anchorClick;
+      edition.value = "full";
+      edition.dispatchEvent(new Event("change"));
+    }
+  });
+  assert.ok(playerDownload.visible);
+  assert.match(playerDownload.filename, /-player\.json$/);
+  assert.deepEqual(playerDownload.book, editions.player);
+
+  await maker.evaluate(() => document.getElementById("exportButton").click());
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Edited full edition ZIP ready");
+  const zip = await maker.evaluate(async () => {
+    const createURL = URL.createObjectURL;
+    let blob;
+    URL.createObjectURL = (value) => { blob = value; return createURL.call(URL, value); };
+    HTMLAnchorElement.prototype.click = () => {};
+    document.getElementById("downloadBookZip").click();
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  });
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader ready for edited book");
+  await reader.upload("jsonInput", "edited-book.zip", zip);
+  await reader.until(() => readerState.entries[0]?.title === "Alpha Book", "Ordered entries opened in Reader");
+  await reader.evaluate(() => document.getElementById("nextButton").click());
+  await reader.until(() => {
+    const img = document.querySelector('#pageViewport img[alt="Private illustration"]');
+    return img?.naturalWidth === 6 && img.closest("figure").style.width === "42%" &&
+      img.closest("figure").querySelector("figcaption").textContent === "Private caption" &&
+      document.querySelector("#pageViewport blockquote")?.textContent === "Revised sentence.";
+  }, "Reader renders edited text, image crop, width, and accessible text");
 }
 
 function startChrome() {

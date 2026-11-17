@@ -18,6 +18,12 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const markdownImage = Symbol("markdownImage");
+const imageSlotContext = Symbol("imageSlotContext");
+const sourceArtifact = Symbol("sourceArtifact");
+const sourceHeadingKey = Symbol("sourceHeadingKey");
+const sourceHidden = Symbol("sourceHidden");
+const sectionVisibility = Symbol("sectionVisibility");
+let editedImageId = 0;
 let headingDraft;
 let importVersion = 0;
 let zipExport;
@@ -133,13 +139,18 @@ function loadPackage(bookPackage, fileName, source = "", config = {}) {
   for (const image of state.recoveredImages.values()) URL.revokeObjectURL(image.url);
   state.recoveredImages.clear();
   state.headingHistory.length = 0;
-  $("#openHeadings").disabled = !findMarkdownHeadings(source, markdownHeader(source).end).length;
+  state.visualEdits = !source;
+  window.bookEditing?.reset();
   $("#undoHeadings").disabled = true;
   state.bookPackage = bookPackage;
   state.entries = bookPackage.entries || [];
   state.source = source;
   state.config = config;
-  refreshImageSlots();
+  if (state.visualEdits) refreshEditedImageSlots();
+  else refreshImageSlots();
+  $("#openHeadings").disabled = state.visualEdits
+    ? !state.entries.some((entry) => entry.blocks.some((block) => block.type === "heading"))
+    : !findMarkdownHeadings(source, markdownHeader(source).end).length;
   if (!state.sourceTheme) state.sourceTheme = bookPackage.theme;
   state.currentPage = 0;
   applyPackageMeta(bookPackage);
@@ -151,7 +162,9 @@ function loadPackage(bookPackage, fileName, source = "", config = {}) {
 }
 
 function openHeadingEditor() {
-  const headings = findMarkdownHeadings(state.source, markdownHeader(state.source).end);
+  const headings = state.visualEdits ? state.entries.flatMap((entry) => entry.blocks
+    .filter((block) => block.type === "heading").map((block) => ({ block, title: block.text, level: block.level })))
+    : findMarkdownHeadings(state.source, markdownHeader(state.source).end);
   const levels = [1, 2, 3, 4, 5, 6];
   const byLevel = levels.map(() => new Map());
   headings.forEach(({ level, title }, index) => {
@@ -264,6 +277,15 @@ function previewHeadingChanges() {
     const edit = { title: group.title.value.trim(), level: Number(group.level.value) };
     for (const index of group.indices) edits[index] = edit;
   }
+  if (state.visualEdits) {
+    const changed = new Map(headings.flatMap((heading, index) => {
+      const edit = edits[index];
+      return edit.title === heading.title && edit.level === heading.level ? [] : [[heading.block, edit]];
+    }));
+    const entries = regroupEditedHeadings(changed);
+    renderHeadingPreview({ entries, count: changed.size });
+    return;
+  }
   let source = state.source;
   let changed = 0;
   for (let index = headings.length - 1; index >= 0; index -= 1) {
@@ -275,10 +297,14 @@ function previewHeadingChanges() {
     changed += 1;
   }
   const bookPackage = buildHeadingPackage(source);
-  headingDraft.preview = { source, bookPackage };
-  const entryCount = bookPackage.entries.length;
-  $("#headingPreviewSummary").textContent = `${changed} heading changes. Entries before and after: ${state.entries.length} → ${entryCount}.`;
-  $("#headingPreviewContents").innerHTML = bookPackage.entries.map((entry) => {
+  renderHeadingPreview({ source, bookPackage, entries: bookPackage.entries, count: changed });
+}
+
+function renderHeadingPreview(preview) {
+  headingDraft.preview = preview;
+  const { entries, count } = preview;
+  $("#headingPreviewSummary").textContent = `${count} heading changes. Entries before and after: ${state.entries.length} → ${entries.length}.`;
+  $("#headingPreviewContents").innerHTML = entries.map((entry) => {
     const sections = entry.blocks.filter((block) => block.type === "heading" && block.level === 3);
     const list = sections.map((block) => `<li>${escapeHtml(block.text)}</li>`).join("");
     return `<li><strong>${escapeHtml(entry.title)}</strong>${list ? `<ul>${list}</ul>` : ""}</li>`;
@@ -298,18 +324,71 @@ function buildHeadingPackage(source) {
 
 function applyHeadingChanges() {
   if (!headingDraft.preview) return;
-  const { source, bookPackage } = headingDraft.preview;
-  state.headingHistory.push(state.source);
+  const { source, bookPackage, entries } = headingDraft.preview;
+  state.headingHistory.push(state.visualEdits ? state.entries : state.source);
   $("#headingEditor").close();
-  updateBookWithHeadings(source, bookPackage);
+  if (state.visualEdits) applyEditedEntries(entries);
+  else updateBookWithHeadings(source, bookPackage);
   showNotice("Heading changes applied.");
 }
 
 function undoHeadingEdit() {
-  const source = state.headingHistory.pop();
-  if (source === undefined) return;
-  updateBookWithHeadings(source, buildHeadingPackage(source));
+  const previous = state.headingHistory.pop();
+  if (previous === undefined) return;
+  if (state.visualEdits) applyEditedEntries(previous);
+  else updateBookWithHeadings(previous, buildHeadingPackage(previous));
   showNotice("Heading change undone.");
+}
+
+function regroupEditedHeadings(changes, currentEntries = state.entries) {
+  const entries = [];
+  const level = entryHeadingLevel(state.config);
+  const ids = new Set(currentEntries.map(({ id }) => id));
+  for (const entry of currentEntries) {
+    const lead = entry.blocks[0];
+    const change = changes.get(lead);
+    const leadChange = lead?.type === "heading" && (lead.level === level || change?.level === level) && change;
+    if (!leadChange || leadChange.level === level || !entries.length) {
+      entries.push({ ...entry, title: leadChange?.title || entry.title, blocks: [] });
+    } else {
+      const current = entries.at(-1);
+      current[sourceArtifact] = [...(current[sourceArtifact] || []), ...(entry[sourceArtifact] || [])];
+    }
+    for (const [index, original] of entry.blocks.entries()) {
+      const edit = changes.get(original);
+      const block = edit ? { ...original, level: edit.level, text: stripMarkup(edit.title) } : original;
+      if (index > 0 && edit?.level === level && original.level !== level) {
+        const base = slugify(edit.title) || "entry";
+        let id = base;
+        for (let suffix = 2; ids.has(id); suffix += 1) id = `${base}-${suffix}`;
+        ids.add(id);
+        entries.push({ id, title: edit.title, blocks: [] });
+      }
+      entries.at(-1).blocks.push(block);
+    }
+  }
+  return entries;
+}
+
+function applyEditedEntries(entries, { keepHeadingHistory = true } = {}) {
+  const currentId = state.entries[state.currentPage]?.id;
+  if (!state.visualEdits || !keepHeadingHistory) state.headingHistory.length = 0;
+  state.visualEdits = true;
+  state.entries = entries.map((entry, order) => ({ ...entry, order }));
+  state.bookPackage.entries = state.entries;
+  const index = state.entries.findIndex(({ id }) => id === currentId);
+  state.currentPage = index < 0 ? Math.max(0, Math.min(state.currentPage, state.entries.length - 1)) : index;
+  refreshEditedImageSlots();
+  window.imageRecovery?.invalidate();
+  $("#openHeadings").disabled = !entries.some((entry) => entry.blocks.some((block) => block.type === "heading"));
+  $("#undoHeadings").disabled = !state.headingHistory.length;
+  $("#statPages").textContent = entries.length;
+  $("#pageCount").textContent = `${entries.length} entries`;
+  $("#statImages").textContent = state.bookPackage.assets.filter((asset) => !asset.ignored).length;
+  $("#statTables").textContent = entries.reduce((sum, entry) => sum + entry.blocks.filter((block) => block.type === "table").length, 0);
+  $("#statDirectives").textContent = entries.reduce((sum, entry) => sum + entry.blocks.length, 0);
+  updateExportLabel();
+  renderPage();
 }
 
 function updateBookWithHeadings(source, bookPackage) {
@@ -407,7 +486,11 @@ function createEntry(raw, index, config = {}) {
 
 function buildBookPackage(source, fileName, parsed, config = {}) {
   const assets = new Map();
-  const entries = parsed.entries.map((entry, index) => ({ id: `${slugify(entry.title) || "entry"}-${index + 1}`, title: entry.title, order: index, blocks: markdownToBlocks(entry.normalized, config, assets) }));
+  const entries = parsed.entries.map((entry, index) => {
+    const blocks = markdownToBlocks(entry.normalized, config, assets);
+    return { id: `${slugify(entry.title) || "entry"}-${index + 1}`, title: entry.title, order: index, blocks,
+      [sourceArtifact]: collectSourceArtifacts(entry.raw, blocks, config) };
+  });
   const metadata = parsed.metadata;
   return {
     format: "ttrpg-book",
@@ -558,11 +641,63 @@ function refreshImageSlots() {
       occurrences.set(pair, occurrence + 1);
       const key = JSON.stringify([image.alt, image.url, occurrence]);
       const context = contexts.get(pair)?.[occurrence] || { page: null, heading: entry.title, before: "", after: "", caption: "" };
-      state.imageSlots.push({ ...image, ...context, key, entryIndex, blockIndex, entryTitle: entry.title });
+      block[imageSlotContext] = { ...image, ...context, key };
+      state.imageSlots.push({ ...block[imageSlotContext], entryIndex, blockIndex, entryTitle: entry.title });
       const recovery = state.recoveredImages.get(key);
       if (recovery) state.previewImages.set(block, recovery);
     });
   });
+}
+
+function refreshEditedImageSlots() {
+  const assets = new Map(state.bookPackage.assets.map((asset) => [asset.id, asset]));
+  state.imageSlots = [];
+  state.previewImages = new WeakMap();
+  for (const [entryIndex, entry] of state.entries.entries()) {
+    let heading = entry.title;
+    let h3 = "";
+    for (const [blockIndex, block] of entry.blocks.entries()) {
+      if (block.type === "heading") {
+        heading = block.text;
+        if (block.level === 3) h3 = heading;
+        if (block.level < 3) h3 = "";
+      }
+      if (block.type !== "image" || block[sourceHidden]) continue;
+      const asset = assets.get(block.assetId);
+      if (!asset) continue;
+      const context = block[imageSlotContext] ||= { key: `edited-image-${++editedImageId}`, page: null, before: "", after: "", caption: "" };
+      const recovery = state.recoveredImages.get(context.key);
+      if (recovery) state.previewImages.set(block, recovery);
+      if (asset.src === "about:blank") continue;
+      state.imageSlots.push({ ...context, alt: block.alt ?? asset.alt, url: asset.src, heading,
+        h2: entry.title, h3: h3 || context.h3 || "", entryIndex, blockIndex, entryTitle: entry.title });
+    }
+  }
+}
+
+function collectSourceArtifacts(source, blocks, config) {
+  const items = [];
+  const headings = blocks.filter((block) => block.type === "heading");
+  let heading = "";
+  let anchor;
+  let searchStart = 0;
+  for (const raw of source.split(/\r?\n/)) {
+    const line = raw.trim();
+    const title = parseHeadingLine(line);
+    if (title) {
+      heading = stripMarkup(title.title);
+      const index = headings.findIndex((block, index) => index >= searchStart && block.text === heading && block.level === title.level);
+      if (index >= 0) {
+        anchor = headings[index][sourceHeadingKey] ||= Symbol();
+        searchStart = index + 1;
+      } else anchor = undefined;
+    }
+    const image = parseMarkdownImage(line);
+    if (image && shouldIgnoreImage(image.alt, image.url, config)) items.push({ label: image.alt || image.url, image, heading, anchor });
+    const directive = line.match(/^\{\{([\w-]+)\b(.*?)(?:\}\})?$/);
+    if (directive) items.push({ label: directive[1], text: directive[2].trim().replace(/^,\s*/, ""), heading, anchor });
+  }
+  return items;
 }
 
 function nearbyImageText(lines, start, direction) {
@@ -675,10 +810,14 @@ function shouldIgnoreImage(alt, url, config = {}) {
 
 function renderPackageBlock(block, assets, entryIndex, blockIndex) {
   if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
-  if (block.type === "paragraph") return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${inlineMarkdown(block.text)}</p>`;
+  if (block.type === "paragraph") {
+    const text = inlineMarkdown(block.text);
+    if (block.style === "book-quote") return `<blockquote class="book-quote">${text}</blockquote>`;
+    return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${text}</p>`;
+  }
   if (block.type === "list") return `<ul>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`;
   if (block.type === "table") return `<table><thead><tr>${block.columns.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  if (block.type === "divider") return `<div class="column-marker" aria-hidden="true"></div>`;
+  if (block.type === "divider") return block.style === "rule" ? '<hr class="book-rule">' : `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {
     const recovery = state.previewImages.get(block);
     const asset = recovery ? { src: recovery.url, alt: recovery.caption } : assets.find((candidate) => candidate.id === block.assetId);
@@ -689,7 +828,9 @@ function renderPackageBlock(block, assets, entryIndex, blockIndex) {
     const className = `${semanticClass}${placementClass}${customClass}`;
     const width = block.width ? ` style="width:${escapeAttribute(block.width)}"` : "";
     const loading = recovery ? `data-recovered-block="${blockIndex}" loading="eager"` : 'loading="lazy"';
-    return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(asset.alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(asset.alt)}" data-image-viewer tabindex="0" ${loading}></span><figcaption>${inlineMarkdown(asset.alt)}</figcaption></figure>`;
+    const alt = block.alt ?? asset.alt;
+    const caption = recovery?.caption ?? block.caption ?? asset.alt;
+    return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(alt)}" data-image-viewer tabindex="0" ${loading}></span>${caption ? `<figcaption>${inlineMarkdown(caption)}</figcaption>` : ""}</figure>`;
   }
   if (block.type === "embed" && block.kind === "video-grid") return `<section><h3>${inlineMarkdown(block.title)}</h3><div class="video-grid">${block.items.map((item, index) => `<a class="video-card" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer"><span class="image-frame image-frame--wide"><img src="${escapeAttribute(item.thumbnail)}" alt="${escapeAttribute(block.title)} video ${index + 1}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(block.title)} video ${index + 1}" data-image-viewer tabindex="0" loading="lazy"></span><span class="video-card-caption">Watch ${escapeHtml(block.title)} video ${index + 1} ↗</span></a>`).join("")}</div></section>`;
   return "";
@@ -715,8 +856,14 @@ function renderContents() {
 function renderPage() {
   const entry = state.entries[state.currentPage];
   if (!entry || !state.bookPackage) return;
-  const html = entry.blocks.map((block, blockIndex) => renderPackageBlock(block, state.bookPackage.assets, state.currentPage, blockIndex)).join("\n");
-  $("#pageViewport").innerHTML = `<article class="book-page"><div class="page-inner"><div class="page-content">${html}</div></div><span class="page-number">${String(state.currentPage + 1).padStart(2, "0")}</span></article>`;
+  const html = entry.blocks.map((block, blockIndex) => {
+    if (block[sourceHidden]) return "";
+    const content = renderPackageBlock(block, state.bookPackage.assets, state.currentPage, blockIndex);
+    return window.bookEditing?.active ? window.bookEditing.wrapBlock(block, blockIndex, content) : content;
+  }).join("\n");
+  const addFirst = window.bookEditing?.active && !entry.blocks.some((block) => !block[sourceHidden])
+    ? '<div class="book-block-actions"><button type="button" data-book-add="0">Add block</button></div>' : "";
+  $("#pageViewport").innerHTML = `<article class="book-page"><div class="page-inner"><div class="page-content">${html}${addFirst}</div></div><span class="page-number">${String(state.currentPage + 1).padStart(2, "0")}</span></article>`;
   $("#currentPage").textContent = state.currentPage + 1;
   $("#totalPages").textContent = state.entries.length;
   $("#currentLabel").textContent = entry.title;
@@ -862,30 +1009,37 @@ function applyTheme(theme = {}) {
 }
 
 function updateExportLabel() {
-  $("#exportButton").textContent = state.recoveredImages.size ? "Export Book ZIP" : "Export JSON";
+  const book = window.bookEditing?.exportPackage() || state.bookPackage;
+  $("#exportButton").textContent = hasBundledImages(book) ? "Export Book ZIP" : "Export JSON";
+}
+
+function hasBundledImages(book) {
+  return state.recoveredImages.size > 0 && book?.entries.some((entry) => entry.blocks.some((block) => state.previewImages.has(block)));
 }
 
 function exportBook() {
   if (!state.bookPackage) return;
-  if (state.recoveredImages.size) {
-    prepareBookZip();
+  const book = window.bookEditing?.exportPackage() || state.bookPackage;
+  const name = `${book.book.id}${$("#exportEdition").value === "player" ? "-player" : ""}`;
+  if (hasBundledImages(book)) {
+    prepareBookZip(book, name);
     return;
   }
-  const blob = new Blob([JSON.stringify(state.bookPackage, null, 2)], { type: "application/json" });
-  downloadBookFile(blob, `${state.bookPackage.book.id}.json`);
+  const blob = new Blob([JSON.stringify(book, null, 2)], { type: "application/json" });
+  downloadBookFile(blob, `${name}.json`);
 }
 
-async function prepareBookZip() {
+async function prepareBookZip(book, name) {
   const dialog = $("#bookZipExport");
   const status = $("#bookZipExportStatus");
   const download = $("#downloadBookZip");
-  const current = { fileName: `${state.bookPackage.book.id}.zip` };
+  const current = { fileName: `${name}.zip` };
   zipExport = current;
   status.textContent = "Preparing the ZIP…";
   download.disabled = true;
   dialog.showModal();
   try {
-    const { blob, imageCount } = await window.bookArchive.create(state.bookPackage, (block) => state.previewImages.get(block));
+    const { blob, imageCount } = await window.bookArchive.create(book, (block) => state.previewImages.get(block));
     if (zipExport !== current || !dialog.open) return;
     current.blob = blob;
     const size = blob.size >= 1024 ** 2 ? `${(blob.size / 1024 ** 2).toFixed(1)} MiB` : `${(blob.size / 1024).toFixed(1)} KiB`;
