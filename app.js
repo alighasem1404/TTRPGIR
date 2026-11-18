@@ -863,7 +863,7 @@ function renderPage() {
   }).join("\n");
   const addFirst = window.bookEditing?.active && !entry.blocks.some((block) => !block[sourceHidden])
     ? '<div class="book-block-actions"><button type="button" data-book-add="0">Add block</button></div>' : "";
-  $("#pageViewport").innerHTML = `<article class="book-page"><div class="page-inner"><div class="page-content">${html}${addFirst}</div></div><span class="page-number">${String(state.currentPage + 1).padStart(2, "0")}</span></article>`;
+  $("#pageViewport").innerHTML = `<article class="book-page"><div class="page-inner"><div class="page-content">${html}${addFirst}</div></div></article>`;
   $("#currentPage").textContent = state.currentPage + 1;
   $("#totalPages").textContent = state.entries.length;
   $("#currentLabel").textContent = entry.title;

@@ -213,6 +213,7 @@ async function smoke(width) {
     }
     await smokeBookEditing(browser, width);
     await smokeBulkEditing(browser, width);
+    await smokeTableAndListEditing(browser, width);
   } finally {
     browser.close();
   }
@@ -507,6 +508,85 @@ async function smokeBookEditing(browser, width) {
       img.closest("figure").querySelector("figcaption").textContent === "Private caption" &&
       document.querySelector("#pageViewport blockquote")?.textContent === "Revised sentence.";
   }, "Reader renders edited text, image crop, width, and accessible text");
+}
+
+async function smokeTableAndListEditing(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Table and list editing demo");
+  const sample = "| Item | Value |\n| --- | --- |\n| Rope | 5 |\n\n- Lantern\n- Oil";
+  await maker.upload("mdInput", "table-and-list.md", `## First Book\n${sample}\n\n## Second Book\n${sample}`);
+  await maker.until(() => state.entries[0]?.title === "First Book", "Table and list editing fixture");
+  const book = await maker.evaluate(async () => {
+    const form = document.getElementById("bookEditingForm");
+    const click = (selector) => form.querySelector(selector).click();
+    const submit = () => form.requestSubmit(form.querySelector('button[value="save"]'));
+    const fill = (name, value) => {
+      const field = form.querySelector(`[aria-label="${name}"]`);
+      field.value = value;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const add = (type) => {
+      document.querySelector("#pageViewport [data-book-add]").click();
+      form.elements.format.value = type;
+      form.elements.format.dispatchEvent(new Event("change"));
+      submit();
+    };
+    const button = (text) => [...form.querySelectorAll("button")].find((button) => button.textContent === text).click();
+    document.getElementById("toggleBookEditing").click();
+    document.querySelector("#pageViewport table td").click();
+    form.elements.scope.value = "identical";
+    fill("Column 1 heading", "Supply");
+    click('[aria-label="Remove column 2"]');
+    button("Add column");
+    fill("Column 2 heading", "Stock");
+    fill("Row 1, column 2", "7");
+    button("Add row");
+    fill("Row 2, column 1", "Torch");
+    fill("Row 2, column 2", "9");
+    click('[aria-label="Remove row 1"]');
+    submit();
+
+    document.querySelector("#pageViewport .book-edit-block ul li").click();
+    fill("Bullet 1", "Hooded lantern");
+    click('[aria-label="Remove bullet 2"]');
+    button("Add bullet");
+    fill("Bullet 2", "Matches");
+    submit();
+    add("list");
+    fill("Bullet 1", "Bedroll");
+    submit();
+    add("table");
+    fill("Column 1 heading", "Task");
+    fill("Row 1, column 1", "Watch");
+    submit();
+
+    const createURL = URL.createObjectURL;
+    const anchorClick = HTMLAnchorElement.prototype.click;
+    let blob;
+    try {
+      URL.createObjectURL = (file) => { blob = file; return createURL.call(URL, file); };
+      HTMLAnchorElement.prototype.click = () => {};
+      document.getElementById("exportButton").click();
+      return JSON.parse(await blob.text());
+    } finally {
+      URL.createObjectURL = createURL;
+      HTMLAnchorElement.prototype.click = anchorClick;
+    }
+  });
+  const editedTable = { type: "table", columns: ["Supply", "Stock"], rows: [["Torch", "9"]] };
+  assert.deepEqual(book.entries[0].blocks.slice(1), [
+    { type: "table", columns: ["Task", ""], rows: [["Watch", ""]] },
+    { type: "list", items: ["Bedroll"] }, editedTable, { type: "list", items: ["Hooded lantern", "Matches"] }
+  ]);
+  assert.deepEqual(book.entries[1].blocks.slice(1), [editedTable, { type: "list", items: ["Lantern", "Oil"] }]);
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader ready for edited tables and lists");
+  await reader.upload("jsonInput", "edited-table-and-list.json", JSON.stringify(book));
+  await reader.until(() => {
+    const page = document.getElementById("pageViewport");
+    return page.querySelectorAll("table").length === 2 && page.querySelectorAll(".page-content ul").length === 2 &&
+      page.textContent.includes("Hooded lantern") && page.textContent.includes("Torch");
+  }, "Reader renders edited and newly added tables and lists");
 }
 
 function startChrome() {

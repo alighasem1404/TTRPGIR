@@ -4,6 +4,8 @@
   const fields = $("#bookEditingFields");
   const message = $("#bookEditingStatus");
   const toggle = $("#toggleBookEditing");
+  const editLabels = new Map([["paragraph", "Edit text"], ["heading", "Edit heading"], ["image", "Edit image"],
+    ["table", "Edit table"], ["list", "Edit bullet list"]]);
   let action;
   let order;
   let hiddenSections;
@@ -23,7 +25,9 @@
     if (button) {
       const { bookEdit, bookAdd } = button.dataset;
       const index = Number(bookEdit ?? bookAdd);
-      if (bookEdit !== undefined && currentEntry().blocks[index]?.type === "image") editImage(index);
+      const type = bookEdit === undefined ? null : currentEntry().blocks[index]?.type;
+      if (type === "image") editImage(index);
+      else if (type === "table" || type === "list") editStructuredBlock(type, index);
       else editText(index, bookEdit === undefined);
       return;
     }
@@ -85,10 +89,9 @@
   }
 
   function wrapBlock(block, index, content) {
-    const editable = ["paragraph", "heading", "image"].includes(block.type);
-    const label = block.type === "image" ? "Edit image" : block.type === "heading" ? "Edit heading" : "Edit text";
-    const control = editable ? `<button type="button" data-book-edit="${index}">${label}</button>` : "";
-    return `<div class="book-edit-block"${editable ? ` data-edit-block="${index}"` : ""}>${content}<div class="book-block-actions">${control}<button type="button" data-book-add="${index + 1}">Add below</button></div></div>`;
+    const label = editLabels.get(block.type);
+    const control = label ? `<button type="button" data-book-edit="${index}">${label}</button>` : "";
+    return `<div class="book-edit-block"${label ? ` data-edit-block="${index}"` : ""}>${content}<div class="book-block-actions">${control}<button type="button" data-book-add="${index + 1}">Add below</button></div></div>`;
   }
 
   function withBlocks(entry, blocks) {
@@ -131,6 +134,10 @@
         add("section-position", `Paragraph ${section.number} under ${section.title}`, ({ block }) => atPosition.has(block));
       }
       add("paragraph-style", "Same paragraph format across the book", ({ block }) => (block.style || "") === (selected.style || ""));
+    } else if (selected.type === "table" || selected.type === "list") {
+      const signature = (block) => JSON.stringify(block.type === "table" ? [block.columns, block.rows] : block.items);
+      const original = signature(selected);
+      add("identical", selected.type === "table" ? "Identical table" : "Identical bullet list", ({ block }) => signature(block) === original);
     }
     return matches;
   }
@@ -183,7 +190,7 @@
     const formats = [["paragraph", "Paragraph"], ["book-quote", "Quote"], ["book-callout", "Callout"],
       ...[1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, `Heading H${level}`])];
     if (!formats.some(([value]) => value === format)) formats.push([format, "Current style"]);
-    if (add) formats.push(["image", "Image"]);
+    if (add) formats.push(["image", "Image"], ["table", "Table"], ["list", "Bullet list"]);
     const otherEntries = state.entries.filter((item) => item !== entry).map(({ id, title }) => [id, title]);
     const scopes = add ? new Map() : editScope(entry, index);
     open(add ? "Add a block" : "Edit preview block", `
@@ -204,6 +211,7 @@
       }
       const selected = form.elements.format.value;
       if (selected === "image") { editImage(index, true); return; }
+      if (selected === "table" || selected === "list") { editStructuredBlock(selected, index, true); return; }
       const textField = form.elements.text;
       const value = textField.value;
       if (command !== "remove" && !value.trim()) throw new Error("Enter some text.");
@@ -251,10 +259,156 @@
     wireScope(scopes, "block");
     const selector = form.elements.format;
     selector.addEventListener("change", () => {
-      const image = selector.value === "image";
-      $("#editTextField").hidden = image;
-      form.elements.text.required = !image;
+      const hasText = !["image", "table", "list"].includes(selector.value);
+      $("#editTextField").hidden = !hasText;
+      form.elements.text.required = hasText;
     });
+  }
+
+  function editStructuredBlock(type, index, add = false) {
+    const entry = currentEntry();
+    const block = add ? null : entry.blocks[index];
+    const noun = type === "table" ? "table" : "bullet list";
+    const scopes = add ? new Map() : editScope(entry, index);
+    let readBlock;
+    open(`${add ? "Add" : "Edit"} ${noun}`, `
+      <div id="structuredBlockFields"></div>
+      ${scopeField(scopes)}
+      <div class="book-edit-actions">
+        <button type="submit" value="save">${add ? `Add ${noun}` : "Save edits"}</button>
+        ${add ? "" : `<button type="submit" value="remove" formnovalidate>Remove ${noun}</button>`}
+      </div>`, (command) => {
+      const edited = command === "remove" ? null : readBlock();
+      if (add) {
+        const blocks = [...entry.blocks];
+        blocks.splice(index, 0, edited);
+        save(withBlocks(entry, blocks), `Added ${noun}.`);
+        return;
+      }
+      const { targets } = scopes.get(form.elements.scope?.value || "single");
+      const matched = new Set(targets.map(({ block }) => block));
+      const entries = state.entries.map((item) => ({ ...item, blocks: item.blocks.flatMap((original) => {
+        if (!matched.has(original)) return [original];
+        return edited ? [{ ...original, ...structuredClone(edited) }] : [];
+      }) }));
+      const count = matched.size;
+      save(entries, `${command === "remove" ? "Removed" : "Updated"} ${count} ${noun}${count === 1 ? "" : "s"}.`);
+    });
+    const container = $("#structuredBlockFields");
+    readBlock = type === "table" ? tableEditor(container, block) : listEditor(container, block);
+    wireScope(scopes, noun);
+  }
+
+  function editorButton(text, label, run) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = text;
+    if (label) button.setAttribute("aria-label", label);
+    button.addEventListener("click", run);
+    return button;
+  }
+
+  function editorField(value, label, onInput, multiline = false) {
+    const input = document.createElement(multiline ? "textarea" : "input");
+    input.setAttribute("aria-label", label);
+    input.dir = "auto";
+    input.value = value;
+    if (multiline) input.rows = 2;
+    input.addEventListener("input", () => onInput(input.value));
+    return input;
+  }
+
+  function listEditor(container, block) {
+    const items = block?.items.length ? [...block.items] : [""];
+    const list = document.createElement("ul");
+    list.className = "book-bullet-editor";
+    const addItem = editorButton("Add bullet", null, () => {
+      items.push("");
+      render();
+      list.lastElementChild.querySelector("textarea").focus();
+    });
+    function render() {
+      list.replaceChildren(...items.map((value, index) => {
+        const row = document.createElement("li");
+        const input = editorField(value, `Bullet ${index + 1}`, (value) => { items[index] = value; }, true);
+        const remove = editorButton("Remove", `Remove bullet ${index + 1}`, () => {
+          items.splice(index, 1);
+          render();
+          (list.children[Math.min(index, items.length - 1)]?.querySelector("textarea") || addItem).focus();
+        });
+        row.append(input, remove);
+        return row;
+      }));
+    }
+    container.append(list, addItem);
+    render();
+    return () => {
+      const formatted = items.filter((item) => item.trim());
+      if (!formatted.length) throw new Error("Enter at least one bullet, or remove the list.");
+      return { type: "list", items: formatted };
+    };
+  }
+
+  function tableEditor(container, block) {
+    const width = block ? block.rows.reduce((width, row) => Math.max(width, row.length), Math.max(1, block.columns.length)) : 2;
+    const fill = (cells) => Array.from({ length: width }, (_, index) => cells[index] ?? "");
+    const columns = fill(block?.columns || []);
+    const rows = block ? block.rows.map(fill) : [fill([])];
+    const viewport = document.createElement("div");
+    viewport.className = "book-table-editor";
+    const table = document.createElement("table");
+    table.setAttribute("aria-label", "Table cells");
+    const headers = table.createTHead();
+    const body = table.createTBody();
+    viewport.append(table);
+    const controls = document.createElement("div");
+    controls.className = "book-edit-actions";
+    const addRow = editorButton("Add row", null, () => {
+      rows.push(columns.map(() => ""));
+      render();
+      body.lastElementChild.querySelector("input").focus();
+    });
+    const addColumn = editorButton("Add column", null, () => {
+      columns.push("");
+      for (const row of rows) row.push("");
+      render();
+      headers.rows[0].cells[columns.length - 1].querySelector("input").focus();
+    });
+    controls.append(addRow, addColumn);
+    function render() {
+      headers.replaceChildren();
+      const header = headers.insertRow();
+      for (const [index, value] of columns.entries()) {
+        const cell = document.createElement("th");
+        cell.scope = "col";
+        const input = editorField(value, `Column ${index + 1} heading`, (value) => { columns[index] = value; });
+        const remove = editorButton("Remove", `Remove column ${index + 1}`, () => {
+          columns.splice(index, 1);
+          for (const row of rows) row.splice(index, 1);
+          render();
+          headers.rows[0].cells[Math.min(index, columns.length - 1)].querySelector("input").focus();
+        });
+        remove.disabled = columns.length === 1;
+        cell.append(input, remove);
+        header.append(cell);
+      }
+      header.insertCell();
+      body.replaceChildren();
+      for (const [rowIndex, values] of rows.entries()) {
+        const row = body.insertRow();
+        for (const [index, value] of values.entries()) {
+          row.insertCell().append(editorField(value, `Row ${rowIndex + 1}, column ${index + 1}`, (value) => { values[index] = value; }));
+        }
+        row.insertCell().append(editorButton("Remove", `Remove row ${rowIndex + 1}`, () => {
+          rows.splice(rowIndex, 1);
+          render();
+          (body.rows[Math.min(rowIndex, rows.length - 1)]?.querySelector("input") || addRow).focus();
+        }));
+      }
+    }
+    container.append(viewport, controls);
+    render();
+    return () => ({ type: "table", columns, rows });
   }
 
   function editMatchingText(targets, selected, command) {

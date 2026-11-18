@@ -66,7 +66,7 @@ function renderEntry() {
   if (!entry || !readerState.bookPackage) return;
   const html = entry.blocks.map((block, blockIndex) => renderBlock(block, readerState.bookPackage.assets, readerState.currentEntry, blockIndex)).join("\n");
   const direction = readerState.bookPackage.book.direction === "rtl" ? "rtl" : "ltr";
-  $("#pageViewport").innerHTML = `<article class="book-page" dir="${direction}"><div class="page-inner"><div class="page-content">${html}</div></div><span class="page-number">${String(readerState.currentEntry + 1).padStart(2, "0")}</span></article>`;
+  $("#pageViewport").innerHTML = `<article class="book-page" dir="${direction}"><div class="page-inner"><div class="page-content">${html}</div></div></article>`;
   $("#currentPage").textContent = readerState.currentEntry + 1;
   $("#totalPages").textContent = readerState.entries.length;
   $("#currentLabel").textContent = entry.title;
