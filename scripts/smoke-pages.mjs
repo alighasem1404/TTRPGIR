@@ -169,6 +169,7 @@ async function smoke(width) {
       document.getElementById("exportButton").click();
     });
     await maker.until(() => !document.getElementById("downloadBookZip").disabled, "ZIP ready");
+    assert.equal(await maker.evaluate(() => zipExport.fileName), "local-source-smoke.zip");
     const zip = await maker.evaluate(async () => {
       const createURL = URL.createObjectURL;
       let blob;
@@ -214,6 +215,8 @@ async function smoke(width) {
     await smokeBookEditing(browser, width);
     await smokeBulkEditing(browser, width);
     await smokeTableAndListEditing(browser, width);
+    await smokeFindAndReplace(browser, width);
+    await smokeOrganizationAndCaptions(browser, width);
   } finally {
     browser.close();
   }
@@ -484,7 +487,7 @@ async function smokeBookEditing(browser, width) {
     }
   });
   assert.ok(playerDownload.visible);
-  assert.match(playerDownload.filename, /-player\.json$/);
+  assert.equal(playerDownload.filename, "editing-player.json");
   assert.deepEqual(playerDownload.book, editions.player);
 
   await maker.evaluate(() => document.getElementById("exportButton").click());
@@ -587,6 +590,212 @@ async function smokeTableAndListEditing(browser, width) {
     return page.querySelectorAll("table").length === 2 && page.querySelectorAll(".page-content ul").length === 2 &&
       page.textContent.includes("Hooded lantern") && page.textContent.includes("Torch");
   }, "Reader renders edited and newly added tables and lists");
+}
+
+async function smokeFindAndReplace(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Find and replace demo");
+  const source = [
+    "## Treacherous Waters", "#### Backer's Name: {{color:#a00,font-weight:bold Emrauld}}", "{margin-top:-5px}",
+    "{{note", "#### Another Backer: {{font-family:'Old Standard TT' Emrauld}}", "}}", "A harbor introduction.",
+    "1. Find the harbor.", "   Continue at dawn.", "", "2) Leave the harbor.", "3. Return home.",
+    "", "A paragraph after the list.", "", "| Location | Hint |", "| --- | --- |", "| Harbor | Guard |", "",
+    "![harbor image](missing-harbor.png)", "## Harbor Story", "A harbor secret.", "### Secret", "harbor clue."
+  ].join("\n");
+  await maker.upload("mdInput", "replace-fixture.md", source);
+  await maker.until(() => state.entries[0]?.title === "Treacherous Waters", "Replacement fixture ready");
+  const imported = await maker.evaluate(() => ({
+    headings: state.entries[0].blocks.filter(({ type }) => type === "heading").map(({ text }) => text),
+    list: state.entries[0].blocks.find(({ type }) => type === "list"),
+    text: document.getElementById("pageViewport").textContent
+  }));
+  assert.ok(imported.headings.includes("Backer's Name: Emrauld"));
+  assert.ok(imported.headings.includes("Another Backer: Emrauld"));
+  assert.deepEqual(imported.list.items, ["Find the harbor. Continue at dawn.", "Leave the harbor.", "Return home."]);
+  assert.equal(imported.list.ordered, true);
+  assert.equal(imported.list.start, 1);
+  assert.ok(!imported.text.includes("margin-top"));
+  const undoBaseline = await maker.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 8;
+    updateImageRecovery(state.imageSlots[0], { blob: await window.bookArchive.encodeWebp(canvas), fileName: "harbor.webp", caption: "harbor image" });
+    return JSON.stringify(window.bookEditing.exportPackage());
+  });
+  const replacements = await maker.evaluate(() => {
+    const open = () => document.getElementById("replaceBookText").click();
+    const form = document.getElementById("bookEditingForm");
+    const set = (name, value) => {
+      form.elements[name].value = value;
+      form.elements[name].dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const submit = () => form.requestSubmit(form.querySelector('button[value="save"]'));
+    open();
+    set("query", "harbor");
+    set("replacement", "Quay $&");
+    const summary = document.getElementById("replaceSummary").textContent;
+    const sourceUnchanged = state.entries[0].blocks.some(({ text }) => text === "A harbor introduction.");
+    submit();
+    const firstOnly = state.entries[1].blocks.some(({ text }) => text === "A harbor secret.");
+    open();
+    set("query", "harbor");
+    set("replacement", "Port");
+    set("replaceScope", "book");
+    submit();
+    open();
+    set("query", "$&");
+    set("replacement", "");
+    set("replaceScope", "book");
+    submit();
+    return { summary, sourceUnchanged, firstOnly, book: window.bookEditing.exportPackage() };
+  });
+  assert.match(replacements.summary, /6 matches in 1 entry/);
+  assert.equal(replacements.sourceUnchanged, true);
+  assert.equal(replacements.firstOnly, true);
+  const [first, second] = replacements.book.entries;
+  assert.equal(first.blocks.find(({ type }) => type === "list").items[0], "Find the Quay . Continue at dawn.");
+  assert.equal(first.blocks.find(({ type }) => type === "table").rows[0][0], "Quay ");
+  assert.equal(first.blocks.find(({ type }) => type === "image").caption, "Quay  image");
+  assert.equal(second.title, "Port Story");
+  assert.ok(second.blocks.some(({ text }) => text === "A Port secret."));
+  assert.equal(replacements.book.assets[0].src, "missing-harbor.png");
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader ready for replacements");
+  await reader.upload("jsonInput", "replaced-book.json", JSON.stringify(replacements.book));
+  await reader.until(() => {
+    const page = document.getElementById("pageViewport");
+    return page.textContent.includes("Backer's Name: Emrauld") && page.querySelectorAll("ol li").length === 3 && page.querySelector("ol").start === 1;
+  }, "Reader displays backer and preserves list numbering");
+  const undoResult = await maker.evaluate(() => {
+    const button = document.getElementById("undoBookReplacement");
+    button.click();
+    const restoredLiteral = state.entries[0].blocks.some(({ text }) => text === "A Quay $& introduction.");
+    button.click();
+    const restoredSecondEntry = state.entries[1].title === "Harbor Story";
+    button.click();
+    return { restoredLiteral, restoredSecondEntry, book: JSON.stringify(window.bookEditing.exportPackage()),
+      caption: [...state.recoveredImages.values()][0].caption, disabled: button.disabled,
+      imageLoaded: document.querySelector("#pageViewport img").src.startsWith("blob:") };
+  });
+  assert.equal(undoResult.restoredLiteral, true);
+  assert.equal(undoResult.restoredSecondEntry, true);
+  assert.equal(undoResult.book, undoBaseline);
+  assert.equal(undoResult.caption, "harbor image");
+  assert.equal(undoResult.disabled, true);
+  assert.equal(undoResult.imageLoaded, true);
+  await maker.evaluate(() => {
+    document.getElementById("replaceBookText").click();
+    const form = document.getElementById("bookEditingForm");
+    for (const [name, value] of [["query", "harbor"], ["replacement", "port"]]) {
+      form.elements[name].value = value;
+      form.elements[name].dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+  });
+  assert.equal(await maker.evaluate(() => document.getElementById("undoBookReplacement").disabled), false);
+  await maker.evaluate(() => {
+    document.getElementById("toggleBookEditing").click();
+    document.querySelector("#pageViewport ol li").click();
+    const form = document.getElementById("bookEditingForm");
+    const first = form.querySelector('[aria-label="Item 1"]');
+    first.value = "Revised first step.";
+    first.dispatchEvent(new Event("input", { bubbles: true }));
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+  });
+  assert.equal(await maker.evaluate(() => document.querySelector("#pageViewport ol li").textContent), "Revised first step.");
+  assert.equal(await maker.evaluate(() => document.getElementById("undoBookReplacement").disabled), true, "Later content edits start a new replacement history");
+}
+
+async function smokeOrganizationAndCaptions(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Organization and caption demo");
+  const a = "missing-caption-a.png";
+  const b = "missing-caption-b.png";
+  await maker.upload("mdInput", "organization-captions.md", [
+    "## One", `![Art](${a})`, "### Keep", "- First", "- Second", "#### Remove me", "Remove this detail.",
+    "##### Child", "Remove this child.", "### Drop section", "Remove this section.",
+    "## Two", `![Art](${a})`, `![Other art](${b})`, "## Remove entry", "Remove this entry text."
+  ].join("\n"));
+  await maker.until(() => state.entries[0]?.title === "One", "Caption fixture ready");
+  const result = await maker.evaluate(async ({ a, b }) => {
+    const form = document.getElementById("bookEditingForm");
+    const open = (id) => document.getElementById(id).click();
+    const set = (name, value) => {
+      const control = form.elements[name];
+      control.value = value;
+      control.dispatchEvent(new Event(control.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
+    };
+    const save = () => form.requestSubmit(form.querySelector('button[value="save"]'));
+    const slot = state.imageSlots[0];
+    const image = document.createElement("canvas");
+    image.width = image.height = 8;
+    updateImageRecovery(slot, { blob: await window.bookArchive.encodeWebp(image), fileName: "caption-art.webp", caption: "Original art caption" });
+    open("setImageCaptions");
+    save();
+    const h2 = window.bookEditing.exportPackage().entries.flatMap((entry) => entry.blocks.filter(({ type }) => type === "image").map(({ caption }) => caption));
+    open("setImageCaptions");
+    set("captionSource", "mapping");
+    set("captionUrls", `${a}\n${b}`);
+    set("captionValues", "Shared caption");
+    const mismatched = form.querySelector('button[value="save"]').disabled;
+    set("captionValues", "Shared caption\nOther caption");
+    save();
+    const captions = window.bookEditing.exportPackage().entries.flatMap((entry) => entry.blocks.filter(({ type }) => type === "image").map(({ caption, alt }) => [caption, alt]));
+    open("organizeBook");
+    form.querySelector('[aria-label="Remove Remove entry and content"]').click();
+    set("scope", "headings");
+    form.querySelector('[aria-label="Remove Remove me and content"]').click();
+    set("scope", "sections");
+    form.querySelector('[aria-label="Remove Drop section and content"]').click();
+    const staged = state.entries.length === 3 && state.entries[0].blocks.some(({ text }) => text === "Remove this detail.");
+    save();
+    open("toggleBookEditing");
+    document.querySelector("#pageViewport ul li").click();
+    set("listStyle", "numbered");
+    set("listStart", "4");
+    save();
+    const numbered = document.querySelector("#pageViewport ol")?.start;
+    document.querySelector("#pageViewport ol li").click();
+    set("listStyle", "bullet");
+    save();
+    const bullets = document.querySelectorAll("#pageViewport .page-content ul li").length;
+    document.querySelector("#pageViewport ul li").click();
+    set("listStyle", "numbered");
+    set("listStart", "4");
+    save();
+    const book = window.bookEditing.exportPackage();
+    const { blob } = await window.bookArchive.create(book, (block) => state.previewImages.get(block));
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const packaged = JSON.parse(await zip.file("book.json").async("string"));
+    return { h2, mismatched, captions, staged, numbered, bullets, book, packaged, bytes: [...new Uint8Array(await blob.arrayBuffer())] };
+  }, { a, b });
+  assert.deepEqual(result.h2, ["One", "Two", "Two"]);
+  assert.equal(result.mismatched, true);
+  assert.deepEqual(result.captions, [["Shared caption", "Original art caption"], ["Shared caption", "Art"], ["Other caption", "Other art"]]);
+  assert.equal(result.staged, true);
+  assert.equal(result.numbered, 4);
+  assert.equal(result.bullets, 2);
+  assert.deepEqual(result.book.entries.map(({ title }) => title), ["One", "Two"]);
+  assert.ok(!JSON.stringify(result.book).includes("Remove this"));
+  assert.equal(result.packaged.entries[0].blocks.find(({ type }) => type === "image").caption, "Shared caption");
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader ready for caption export");
+  await reader.upload("jsonInput", "captions.zip", result.bytes);
+  await reader.until(() => {
+    const page = document.getElementById("pageViewport");
+    return page.querySelector("ol")?.start === 4 && page.querySelector("img")?.naturalWidth === 8 && page.querySelector("figcaption")?.textContent === "Shared caption";
+  }, "Reader displays standalone captions and numbered list after removal");
+  const empty = await maker.evaluate(() => {
+    document.getElementById("organizeBook").click();
+    const form = document.getElementById("bookEditingForm");
+    while (form.querySelector('button[aria-label^="Remove "]')) form.querySelector('button[aria-label^="Remove "]').click();
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    return { entries: state.entries.length, preview: document.getElementById("pageViewport").textContent, counter: document.getElementById("currentPage").textContent };
+  });
+  assert.deepEqual(empty, { entries: 0, preview: "", counter: "0" });
+  const emptyBook = await maker.evaluate(() => JSON.stringify(window.bookEditing.exportPackage()));
+  await reader.upload("jsonInput", "empty-book.json", emptyBook);
+  await reader.until(() => document.getElementById("currentPage").textContent === "0" &&
+    !document.getElementById("pageViewport").textContent, "Reader clears the previous book after every entry was removed");
 }
 
 function startChrome() {

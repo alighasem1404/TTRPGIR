@@ -11,8 +11,9 @@
   let hiddenSections;
   let active = false;
   let releaseImagePreview;
+  const replacementHistory = [];
 
-  window.bookEditing = { reset, wrapBlock, exportPackage, get active() { return active; } };
+  window.bookEditing = { reset, wrapBlock, exportPackage, clearReplacementHistory, get active() { return active; } };
   reset();
   toggle.addEventListener("click", () => {
     active = !active;
@@ -41,6 +42,9 @@
   $("#organizeBook").addEventListener("click", organizeBook);
   $("#editSectionRules").addEventListener("click", editSectionRules);
   $("#reviewSourceItems").addEventListener("click", reviewSourceItems);
+  $("#replaceBookText").addEventListener("click", findAndReplace);
+  $("#undoBookReplacement").addEventListener("click", undoReplacement);
+  $("#setImageCaptions").addEventListener("click", setImageCaptions);
   $("#exportEdition").addEventListener("change", updateExportLabel);
   dialog.addEventListener("close", () => { if (!dialog.open) releaseImagePreview?.(); });
   form.addEventListener("submit", async (event) => {
@@ -67,10 +71,100 @@
     toggle.textContent = "Edit preview";
     order = [];
     hiddenSections = new Set();
+    clearReplacementHistory();
     $("#exportEdition").value = "full";
   }
 
   function currentEntry() { return state.entries[state.currentPage]; }
+
+  function setImageCaptions() {
+    if (!state.bookPackage) return;
+    open("Image captions", `
+      <label>Caption source <select name="captionSource"><option value="heading">H2 of each entry</option><option value="mapping">Import URL and caption lists</option></select></label>
+      <div id="captionMapping" class="book-edit-grid" hidden>
+        <label>Image URLs — one per line<textarea name="captionUrls" rows="8" dir="auto" spellcheck="false"></textarea></label>
+        <label>Corresponding captions — one per line<textarea name="captionValues" rows="8" dir="auto"></textarea></label>
+      </div>
+      <p>Applies across the book. URL line 1 pairs with caption line 1, URL line 2 with caption line 2, and so on.</p>
+      <p id="captionSummary" role="status"></p>
+      <ul id="captionExamples" class="book-source-list" aria-label="Caption preview"></ul>
+      <div class="book-edit-actions"><button type="submit" value="save" disabled>Apply captions</button></div>`, () => {
+      const changes = captionChanges();
+      if (!changes.updates.size) throw new Error("No matching images to update.");
+      const entries = state.entries.map((entry) => ({ ...entry, blocks: entry.blocks.map((block) => {
+        const change = changes.updates.get(block);
+        if (!change) return block;
+        const recovery = state.previewImages.get(block);
+        if (recovery) {
+          const key = block[imageSlotContext].key;
+          state.recoveredImages.set(key, { ...recovery, caption: change.caption });
+        }
+        return { ...block, caption: change.caption, alt: change.alt };
+      }) }));
+      save(entries, `Updated ${changes.updates.size} image captions.`);
+    });
+    const source = form.elements.captionSource;
+    const preview = () => {
+      $("#captionMapping").hidden = source.value !== "mapping";
+      const list = $("#captionExamples");
+      list.replaceChildren();
+      const button = form.querySelector('button[value="save"]');
+      button.disabled = true;
+      try {
+        const { updates, unmatched } = captionChanges();
+        $("#captionSummary").textContent = `${updates.size} images to update.${unmatched.length ? ` ${unmatched.length} URLs have no matching image.` : ""}`;
+        for (const { title, caption } of [...updates.values()].slice(0, 30)) {
+          const item = document.createElement("li");
+          item.textContent = `${title} · ${caption || "(empty caption)"}`;
+          list.append(item);
+        }
+        button.disabled = !updates.size;
+      } catch (error) {
+        $("#captionSummary").textContent = error.message;
+      }
+    };
+    source.addEventListener("change", preview);
+    for (const control of [form.elements.captionUrls, form.elements.captionValues]) control.addEventListener("input", preview);
+    preview();
+  }
+
+  function captionChanges() {
+    const mapping = new Map();
+    const matched = new Set();
+    const updates = new Map();
+    const source = form.elements.captionSource.value;
+    if (source === "mapping") {
+      const urls = form.elements.captionUrls.value.trim().split(/\r?\n/).map((value) => value.trim());
+      const captions = form.elements.captionValues.value.replace(/\r\n/g, "\n").split("\n");
+      while (captions.length > urls.length && captions.at(-1) === "") captions.pop();
+      if (!urls[0] || urls.some((url) => !url)) throw new Error("Enter one image URL per line, with no empty URL rows.");
+      if (urls.length !== captions.length) throw new Error(`The lists need the same number of lines. There are ${urls.length} URLs and ${captions.length} captions.`);
+      urls.forEach((url, index) => {
+        const caption = captions[index].trim();
+        if (mapping.has(url) && mapping.get(url) !== caption) throw new Error(`The URL on line ${index + 1} has two different captions.`);
+        mapping.set(url, caption);
+      });
+    }
+    const assets = new Map(state.bookPackage.assets.map((asset) => [asset.id, asset]));
+    for (const entry of state.entries) {
+      let h2 = entry.title;
+      for (const block of entry.blocks) {
+        if (block.type === "heading" && block.level === 2) h2 = block.text;
+        if (block.type !== "image" || block[sourceHidden]) continue;
+        const asset = assets.get(block.assetId);
+        const urls = [...new Set([asset?.src, block[markdownImage]?.url, block[imageSlotContext]?.url].filter(Boolean))];
+        const keys = urls.filter((url) => mapping.has(url));
+        if (source === "mapping" && !keys.length) continue;
+        const captions = new Set(keys.map((url) => mapping.get(url)));
+        if (captions.size > 1) throw new Error(`Conflicting captions match an image in ${entry.title}.`);
+        for (const key of keys) matched.add(key);
+        const recovery = state.previewImages.get(block);
+        updates.set(block, { title: entry.title, caption: source === "heading" ? h2 : mapping.get(keys[0]),
+          alt: block.alt ?? recovery?.caption ?? asset?.alt ?? "" });
+      }
+    }
+    return { updates, unmatched: [...mapping.keys()].filter((url) => !matched.has(url)) };
+  }
 
   function open(title, html, apply) {
     releaseImagePreview?.();
@@ -82,14 +176,33 @@
     if (!dialog.open) dialog.showModal();
   }
 
-  function save(entries, notice) {
+  function save(entries, notice, keepReplacementHistory = false) {
     dialog.close();
-    applyEditedEntries(entries, { keepHeadingHistory: false });
+    applyEditedEntries(entries, { keepHeadingHistory: false, keepReplacementHistory });
     showNotice(notice);
   }
 
+  function clearReplacementHistory() {
+    replacementHistory.length = 0;
+    $("#undoBookReplacement").disabled = true;
+  }
+
+  function undoReplacement() {
+    const previous = replacementHistory.pop();
+    if (!previous) return;
+    order = previous.order;
+    hiddenSections = previous.hiddenSections;
+    for (const [key, caption] of previous.captions) {
+      const image = state.recoveredImages.get(key);
+      if (image) state.recoveredImages.set(key, { ...image, caption });
+    }
+    state.currentPage = previous.currentPage;
+    save(previous.entries, "Replacement undone.", true);
+    $("#undoBookReplacement").disabled = !replacementHistory.length;
+  }
+
   function wrapBlock(block, index, content) {
-    const label = editLabels.get(block.type);
+    const label = block.type === "list" && block.ordered ? "Edit numbered list" : editLabels.get(block.type);
     const control = label ? `<button type="button" data-book-edit="${index}">${label}</button>` : "";
     return `<div class="book-edit-block"${label ? ` data-edit-block="${index}"` : ""}>${content}<div class="book-block-actions">${control}<button type="button" data-book-add="${index + 1}">Add below</button></div></div>`;
   }
@@ -100,6 +213,118 @@
 
   function displayOptions(options, selected) {
     return options.map(([value, label]) => `<option value="${escapeAttribute(value)}"${value === selected ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
+  }
+
+  function findAndReplace() {
+    const entry = currentEntry();
+    if (!entry) return;
+    open("Find and replace", `
+      <label>Find <input name="query" type="text" required autocomplete="off" dir="auto"></label>
+      <label>Replace with <input name="replacement" type="text" autocomplete="off" dir="auto"></label>
+      <label>Search in <select name="replaceScope">${displayOptions([["entry", `Current entry — ${entry.title}`], ["book", "Entire book"]], "entry")}</select></label>
+      <label class="book-edit-check"><input name="matchCase" type="checkbox"> Match case</label>
+      <p>Replaces literal text in headings, paragraphs, lists, tables, image captions, and alt text. Leave the replacement empty to delete matching text.</p>
+      <p id="replaceSummary" role="status">Enter text to find.</p>
+      <ul id="replaceExamples" class="book-source-list" aria-label="Replacement preview"></ul>
+      <div class="book-edit-actions"><button type="submit" value="save" disabled>Replace all matches</button></div>`, () => {
+      const result = replacementPreview(entry);
+      if (!result.count) throw new Error("No matching text to replace.");
+      if (result.emptyTitle) throw new Error("A heading or entry title would become empty. Enter replacement text for that title.");
+      replacementHistory.push({ entries: state.entries, currentPage: state.currentPage,
+        order: [...order], hiddenSections: new Set(hiddenSections),
+        captions: new Map(result.recoveries.map(({ key }) => [key, state.recoveredImages.get(key).caption])) });
+      for (const { key, caption } of result.recoveries) {
+        state.recoveredImages.set(key, { ...state.recoveredImages.get(key), caption });
+      }
+      for (const [before, after] of result.sectionRenames) {
+        if (hiddenSections.has(before)) hiddenSections.add(after);
+        const index = order.indexOf(before);
+        if (index !== -1 && !order.includes(after)) order.splice(index + 1, 0, after);
+      }
+      save(result.entries, `Replaced ${result.count} matches in ${result.entryCount} ${result.entryCount === 1 ? "entry" : "entries"}.`, true);
+      $("#undoBookReplacement").disabled = false;
+    });
+    function preview() {
+      const result = replacementPreview(entry);
+      $("#replaceSummary").textContent = !form.elements.query.value ? "Enter text to find."
+        : result.emptyTitle ? "A heading or entry title would become empty. Enter replacement text for that title."
+          : `${result.count} matches in ${result.entryCount} ${result.entryCount === 1 ? "entry" : "entries"}.`;
+      const list = $("#replaceExamples");
+      list.replaceChildren(...result.examples.map(({ entry, before, after }) => {
+        const item = document.createElement("li");
+        const title = document.createElement("strong");
+        title.textContent = entry;
+        const oldValue = document.createElement("div");
+        oldValue.textContent = `Before · ${before.slice(0, 240)}`;
+        const newValue = document.createElement("div");
+        newValue.textContent = `After · ${after.slice(0, 240)}`;
+        item.append(title, oldValue, newValue);
+        return item;
+      }));
+      form.querySelector('button[value="save"]').disabled = !result.count || result.emptyTitle;
+    }
+    for (const input of [form.elements.query, form.elements.replacement, form.elements.replaceScope, form.elements.matchCase]) {
+      input.addEventListener("input", preview);
+      input.addEventListener("change", preview);
+    }
+    form.elements.query.focus();
+  }
+
+  function replacementPreview(selectedEntry) {
+    const { query, replacement, replaceScope, matchCase } = form.elements;
+    if (!query.value) return { count: 0, entryCount: 0, examples: [] };
+    const expression = new RegExp(query.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), matchCase.checked ? "g" : "gi");
+    const examples = [];
+    const recoveries = [];
+    const sectionRenames = [];
+    let count = 0;
+    let entryCount = 0;
+    let emptyTitle = false;
+    const replace = (text) => text.replace(expression, () => {
+      count += 1;
+      return replacement.value;
+    });
+    const assets = new Map(state.bookPackage.assets.map((asset) => [asset.id, asset]));
+    const entries = state.entries.map((entry) => {
+      if (replaceScope.value === "entry" && entry !== selectedEntry) return entry;
+      const previousCount = count;
+      const change = (text) => {
+        const after = replace(text);
+        if (after !== text && examples.length < 30) examples.push({ entry: entry.title, before: text, after });
+        return after;
+      };
+      const blocks = entry.blocks.map((block) => {
+        if (block[sourceHidden]) return block;
+        if (block.type === "heading" || block.type === "paragraph") {
+          const text = change(block.text);
+          if (block.type === "heading" && !text.trim()) emptyTitle = true;
+          if (block.type === "heading" && block.level === 3 && text !== block.text) sectionRenames.push([sectionName(block.text), sectionName(text)]);
+          return text === block.text ? block : { ...block, text };
+        }
+        if (block.type === "list") return { ...block, items: block.items.map(change) };
+        if (block.type === "table") return { ...block, columns: block.columns.map(change), rows: block.rows.map((row) => row.map(change)) };
+        if (block.type === "image") {
+          const asset = assets.get(block.assetId);
+          const recovery = state.previewImages.get(block);
+          const beforeCaption = recovery?.caption ?? block.caption ?? asset?.alt ?? "";
+          const beforeAlt = block.alt ?? recovery?.caption ?? asset?.alt ?? "";
+          const caption = change(beforeCaption);
+          const alt = change(beforeAlt);
+          if (caption === beforeCaption && alt === beforeAlt) return block;
+          if (recovery) recoveries.push({ key: block[imageSlotContext].key, caption });
+          return { ...block, caption, alt };
+        }
+        if (block.type === "embed" && typeof block.title === "string") return { ...block, title: change(block.title) };
+        return block;
+      });
+      const lead = entry.blocks[0];
+      const syncedTitle = lead?.type === "heading" && lead.level === entryHeadingLevel(state.config) && entry.title === lead.text;
+      const title = syncedTitle ? blocks[0].text : change(entry.title);
+      if (!title.trim()) emptyTitle = true;
+      if (count > previousCount) entryCount += 1;
+      return { ...entry, title, blocks };
+    });
+    return { entries, count, entryCount, examples, recoveries, emptyTitle, sectionRenames };
   }
 
   function editScope(entry, index) {
@@ -135,9 +360,9 @@
       }
       add("paragraph-style", "Same paragraph format across the book", ({ block }) => (block.style || "") === (selected.style || ""));
     } else if (selected.type === "table" || selected.type === "list") {
-      const signature = (block) => JSON.stringify(block.type === "table" ? [block.columns, block.rows] : block.items);
+      const signature = (block) => JSON.stringify(block.type === "table" ? [block.columns, block.rows] : [Boolean(block.ordered), block.start ?? 1, block.items]);
       const original = signature(selected);
-      add("identical", selected.type === "table" ? "Identical table" : "Identical bullet list", ({ block }) => signature(block) === original);
+      add("identical", selected.type === "table" ? "Identical table" : "Identical list", ({ block }) => signature(block) === original);
     }
     return matches;
   }
@@ -268,7 +493,7 @@
   function editStructuredBlock(type, index, add = false) {
     const entry = currentEntry();
     const block = add ? null : entry.blocks[index];
-    const noun = type === "table" ? "table" : "bullet list";
+    const noun = type === "table" ? "table" : "list";
     const scopes = add ? new Map() : editScope(entry, index);
     let readBlock;
     open(`${add ? "Add" : "Edit"} ${noun}`, `
@@ -320,18 +545,48 @@
 
   function listEditor(container, block) {
     const items = block?.items.length ? [...block.items] : [""];
-    const list = document.createElement("ul");
-    list.className = "book-bullet-editor";
-    const addItem = editorButton("Add bullet", null, () => {
+    let ordered = Boolean(block?.ordered);
+    const listContainer = document.createElement("div");
+    let list;
+    const style = document.createElement("label");
+    style.textContent = "List style";
+    const select = document.createElement("select");
+    select.name = "listStyle";
+    select.innerHTML = displayOptions([["bullet", "Bullet points"], ["numbered", "Numbered"]], ordered ? "numbered" : "bullet");
+    style.append(select);
+    const startLabel = document.createElement("label");
+    startLabel.textContent = "Start at";
+    const start = document.createElement("input");
+    start.type = "number";
+    start.min = "0";
+    start.step = "1";
+    start.name = "listStart";
+    start.value = block?.start ?? 1;
+    startLabel.append(start);
+    function updateStyle() {
+      ordered = select.value === "numbered";
+      startLabel.hidden = !ordered;
+      start.disabled = !ordered;
+      start.required = ordered;
+      addItem.textContent = ordered ? "Add item" : "Add bullet";
+      render();
+    }
+    select.addEventListener("change", updateStyle);
+    start.addEventListener("input", () => { if (Number.isSafeInteger(start.valueAsNumber)) list.start = start.valueAsNumber; });
+    const addItem = editorButton(block?.ordered ? "Add item" : "Add bullet", null, () => {
       items.push("");
       render();
       list.lastElementChild.querySelector("textarea").focus();
     });
     function render() {
-      list.replaceChildren(...items.map((value, index) => {
+      list = document.createElement(ordered ? "ol" : "ul");
+      list.className = "book-bullet-editor";
+      if (ordered) list.start = start.valueAsNumber;
+      const label = ordered ? "Item" : "Bullet";
+      list.append(...items.map((value, index) => {
         const row = document.createElement("li");
-        const input = editorField(value, `Bullet ${index + 1}`, (value) => { items[index] = value; }, true);
-        const remove = editorButton("Remove", `Remove bullet ${index + 1}`, () => {
+        const input = editorField(value, `${label} ${index + 1}`, (value) => { items[index] = value; }, true);
+        const remove = editorButton("Remove", `Remove ${label.toLowerCase()} ${index + 1}`, () => {
           items.splice(index, 1);
           render();
           (list.children[Math.min(index, items.length - 1)]?.querySelector("textarea") || addItem).focus();
@@ -339,13 +594,16 @@
         row.append(input, remove);
         return row;
       }));
+      listContainer.replaceChildren(list);
     }
-    container.append(list, addItem);
-    render();
+    container.append(style, startLabel, listContainer, addItem);
+    updateStyle();
     return () => {
       const formatted = items.filter((item) => item.trim());
-      if (!formatted.length) throw new Error("Enter at least one bullet, or remove the list.");
-      return { type: "list", items: formatted };
+      if (!formatted.length) throw new Error("Enter at least one item, or remove the list.");
+      if (ordered && (!Number.isSafeInteger(start.valueAsNumber) || start.valueAsNumber < 0)) throw new Error("Enter a whole starting number of zero or more.");
+      return { type: "list", items: formatted, ...(ordered ? { ordered: true, start: start.valueAsNumber }
+        : block?.ordered ? { ordered: false, start: undefined } : {}) };
     };
   }
 
@@ -790,16 +1048,43 @@
     const entries = [...state.entries];
     const parts = splitSections(entry.blocks);
     const sections = parts.filter((part) => part.title);
+    const removedBlocks = new Set();
+    const headings = entry.blocks.flatMap((block, index) => block.type === "heading" && index > 0 ? [{ title: block.text, block, index }] : []);
     let scope = "entries";
     open("Organize book", `
-      <label>Reorder <select name="scope"><option value="entries">Book entries</option><option value="sections">Sections in ${escapeHtml(entry.title)}</option></select></label>
+      <label>Organize <select name="scope"><option value="entries">Book entries</option><option value="sections">Sections in ${escapeHtml(entry.title)}</option><option value="headings">Headings and content in this entry</option></select></label>
+      <p>Remove deletes the heading and all its content when you apply changes. Close to discard pending changes.</p>
       <button id="sortBookEntries" type="button">Sort alphabetically</button>
       <ol id="bookOrderRows" class="book-order-list" aria-label="Order"></ol>
-      <div class="book-edit-actions"><button type="submit" value="save">Apply order</button></div>`, () => {
-      const blocks = orderSections(parts, sections);
-      save(entries.map((item) => item === entry ? { ...item, blocks } : item), "Book order updated.");
+      <div class="book-edit-actions"><button type="submit" value="save">Apply changes</button></div>`, () => {
+      const blocks = orderSections(parts, sections).filter((block) => !removedBlocks.has(block));
+      save(entries.map((item) => item === entry ? { ...item, blocks } : item), "Book organization updated.");
     });
-    const render = () => renderOrder($("#bookOrderRows"), scope === "entries" ? entries : sections, ({ title }) => title);
+    const render = () => {
+      const items = scope === "entries" ? entries : scope === "sections" ? sections.filter(({ blocks }) => !removedBlocks.has(blocks[0]))
+        : headings.filter(({ block }) => !removedBlocks.has(block));
+      renderOrder($("#bookOrderRows"), items, ({ title }) => title, (row, item) => {
+        row.append(editorButton("Remove", `Remove ${item.title} and content`, () => {
+          if (scope === "entries") entries.splice(entries.indexOf(item), 1);
+          else {
+            const block = scope === "sections" ? item.blocks[0] : item.block;
+            const start = entry.blocks.indexOf(block);
+            let end = start + 1;
+            while (end < entry.blocks.length && !(entry.blocks[end].type === "heading" && entry.blocks[end].level <= block.level)) end += 1;
+            for (const removed of entry.blocks.slice(start, end)) removedBlocks.add(removed);
+          }
+          render();
+        }));
+      }, scope === "headings" ? null : (ordered) => {
+        if (scope === "sections") {
+          // Retain removed sections in their slots until the staged deletion is applied.
+          let index = 0;
+          for (let position = 0; position < sections.length; position += 1) {
+            if (!removedBlocks.has(sections[position].blocks[0])) sections[position] = ordered[index++];
+          }
+        }
+      });
+    };
     form.elements.scope.addEventListener("change", () => {
       scope = form.elements.scope.value;
       $("#sortBookEntries").hidden = scope !== "entries";
@@ -812,11 +1097,12 @@
     render();
   }
 
-  function renderOrder(list, items, title, extra = () => {}) {
-    const render = () => renderOrder(list, items, title, extra);
+  function renderOrder(list, items, title, extra = () => {}, onOrder) {
+    const render = () => renderOrder(list, items, title, extra, onOrder);
     function move(from, to) {
       if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return;
       items.splice(to, 0, items.splice(from, 1)[0]);
+      onOrder?.(items);
       render();
     }
     list.replaceChildren(...items.map((item, index) => {
@@ -824,6 +1110,10 @@
       row.draggable = true;
       row.innerHTML = `<span>${escapeHtml(title(item))}</span><button type="button" aria-label="Move ${escapeAttribute(title(item))} up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" aria-label="Move ${escapeAttribute(title(item))} down" ${index === items.length - 1 ? "disabled" : ""}>↓</button>`;
       const [, up, down] = row.children;
+      if (onOrder === null) {
+        up.hidden = down.hidden = true;
+        row.draggable = false;
+      }
       for (const [button, offset] of [[up, -1], [down, 1]]) button.addEventListener("click", () => {
         move(index, index + offset);
         const controls = list.children[index + offset].querySelectorAll("button:not(:disabled)");
@@ -831,9 +1121,11 @@
       });
       row.addEventListener("dragstart", (event) => event.dataTransfer.setData("application/x-book-order", String(index)));
       row.addEventListener("dragover", (event) => {
+        if (onOrder === null) return;
         if (event.dataTransfer.types.includes("application/x-book-order")) event.preventDefault();
       });
       row.addEventListener("drop", (event) => {
+        if (onOrder === null) return;
         event.preventDefault();
         const from = event.dataTransfer.getData("application/x-book-order");
         if (from) move(Number(from), index);
@@ -843,7 +1135,7 @@
     }));
     if (!items.length) {
       const empty = document.createElement("li");
-      empty.textContent = "No H3 sections in this view.";
+      empty.textContent = "No items in this view.";
       list.append(empty);
     }
   }

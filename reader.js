@@ -63,7 +63,16 @@ function loadPackage(bookPackage, fileName, images = new Map()) {
 
 function renderEntry() {
   const entry = readerState.entries[readerState.currentEntry];
-  if (!entry || !readerState.bookPackage) return;
+  if (!readerState.bookPackage) return;
+  if (!entry) {
+    $("#pageViewport").replaceChildren();
+    $("#currentPage").textContent = "0";
+    $("#totalPages").textContent = "0";
+    $("#currentLabel").textContent = "No entries";
+    $("#previousButton").disabled = $("#nextButton").disabled = true;
+    renderContents();
+    return;
+  }
   const html = entry.blocks.map((block, blockIndex) => renderBlock(block, readerState.bookPackage.assets, readerState.currentEntry, blockIndex)).join("\n");
   const direction = readerState.bookPackage.book.direction === "rtl" ? "rtl" : "ltr";
   $("#pageViewport").innerHTML = `<article class="book-page" dir="${direction}"><div class="page-inner"><div class="page-content">${html}</div></div></article>`;
@@ -106,7 +115,11 @@ function renderBlock(block, assets, entryIndex, blockIndex) {
     if (block.style === "book-quote") return `<blockquote class="book-quote">${text}</blockquote>`;
     return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${text}</p>`;
   }
-  if (block.type === "list") return `<ul>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`;
+  if (block.type === "list") {
+    const tag = block.ordered ? "ol" : "ul";
+    const start = block.ordered && Number.isSafeInteger(block.start) ? ` start="${block.start}"` : "";
+    return `<${tag}${start}>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</${tag}>`;
+  }
   if (block.type === "table") return `<table><thead><tr>${block.columns.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   if (block.type === "divider") return block.style === "rule" ? '<hr class="book-rule">' : `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {

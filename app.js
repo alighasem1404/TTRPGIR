@@ -370,7 +370,8 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
   return entries;
 }
 
-function applyEditedEntries(entries, { keepHeadingHistory = true } = {}) {
+function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacementHistory = false } = {}) {
+  if (!keepReplacementHistory) window.bookEditing?.clearReplacementHistory();
   const currentId = state.entries[state.currentPage]?.id;
   if (!state.visualEdits || !keepHeadingHistory) state.headingHistory.length = 0;
   state.visualEdits = true;
@@ -549,10 +550,27 @@ function markdownToBlocks(source, config, assets) {
       blocks.push(tableBlock(tableLines));
       continue;
     }
-    if (/^[-*]\s+/.test(line)) {
+    if (listItemText(line) !== null) {
       const items = [];
-      while (index < lines.length && /^\s*[-*]\s+/.test(lines[index].trim())) items.push(lines[index++].trim().replace(/^[-*]\s+/, ""));
-      blocks.push({ type: "list", items });
+      const start = line.match(/^(\d{1,9})[.)]\s+/);
+      const ordered = Boolean(start);
+      while (index < lines.length) {
+        const item = listItemText(lines[index].trim());
+        if (item !== null) {
+          if (/^\d{1,9}[.)]\s+/.test(lines[index].trim()) !== ordered) break;
+          items.push(item);
+          index += 1;
+        } else if (/^[ \t]+\S/.test(lines[index]) && !isStructuralLine(lines[index].trim())) {
+          items[items.length - 1] += ` ${lines[index++].trim()}`;
+        } else if (!lines[index].trim()) {
+          let next = index + 1;
+          while (next < lines.length && !lines[next].trim()) next += 1;
+          if (next === lines.length || listItemText(lines[next].trim()) === null) break;
+          if (/^\d{1,9}[.)]\s+/.test(lines[next].trim()) !== ordered) break;
+          index = next;
+        } else break;
+      }
+      blocks.push({ type: "list", items, ...(ordered && { ordered: true, start: Number(start[1]) }) });
       continue;
     }
     if (/^---+$/.test(line)) { blocks.push({ type: "divider", style: "rule" }); index += 1; continue; }
@@ -710,6 +728,7 @@ function nearbyImageText(lines, start, direction) {
 }
 
 function updateImageRecovery(slot, image) {
+  window.bookEditing?.clearReplacementHistory();
   const block = state.entries[slot.entryIndex].blocks[slot.blockIndex];
   const previous = state.recoveredImages.get(slot.key);
   if (image) {
@@ -796,7 +815,22 @@ function findImageRule(alt, url, config = {}) {
 function extractImageAlt(line) { return line.match(/^!\[([^\]]*)\]/)?.[1] || ""; }
 
 function cleanSource(source) {
-  return source.replace(/^\s*\{\{[^\n]*\}\}\s*$/gm, "").replace(/^\s*\{\{[^\n]*$/gm, "").replace(/^\s*\}\}\s*$/gm, "").replace(/^\s*\{font-size:[^}]+\}\s*$/gm, "").replace(/\{\{width:\d+px\}\}/g, "").replace(/^\s*:{1,}\s*$/gm, "").replace(/^\s*\|+\s*$/gm, "").replace(/^\s*\\column\s*$/gm, "\n<!--COLUMN_BREAK-->\n").replace(/^\s*:{4,}\s*$/gm, "").trim();
+  return unwrapHomebreweryText(source).replace(/^[ \t]*\{\{[^\n]*$/gm, "").replace(/^[ \t]*\}\}[ \t]*$/gm, "")
+    .replace(/^[ \t]*\{[\w-]+\s*:[^}\n]+\}[ \t]*$/gm, "").replace(/^[ \t]*:{1,}[ \t]*$/gm, "")
+    .replace(/^[ \t]*\|+[ \t]*$/gm, "").replace(/^[ \t]*\\column[ \t]*$/gm, "\n<!--COLUMN_BREAK-->\n").trim();
+}
+
+function unwrapHomebreweryText(value) {
+  let text = value;
+  while (/\{\{[^{}\n]*\}\}/.test(text)) {
+    text = text.replace(/\{\{([^{}\n]*)\}\}/g, (_, content) => {
+      if (/^\s/.test(content)) return content.trim();
+      const match = content.match(/^((?:[^\s"']|"[^"]*"|'[^']*')+)(?:[ \t]+([\s\S]*))?$/);
+      if (!match || /^(?:frontCover|insideCover|backCover|banner|pageNumber|footnote|watermark|logo)(?:,|$)/i.test(match[1])) return "";
+      return match[2]?.trim() || "";
+    });
+  }
+  return text;
 }
 
 function shouldIgnoreImage(alt, url, config = {}) {
@@ -815,7 +849,11 @@ function renderPackageBlock(block, assets, entryIndex, blockIndex) {
     if (block.style === "book-quote") return `<blockquote class="book-quote">${text}</blockquote>`;
     return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${text}</p>`;
   }
-  if (block.type === "list") return `<ul>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`;
+  if (block.type === "list") {
+    const tag = block.ordered ? "ol" : "ul";
+    const start = block.ordered && Number.isSafeInteger(block.start) ? ` start="${block.start}"` : "";
+    return `<${tag}${start}>${block.items.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</${tag}>`;
+  }
   if (block.type === "table") return `<table><thead><tr>${block.columns.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   if (block.type === "divider") return block.style === "rule" ? '<hr class="book-rule">' : `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {
@@ -855,7 +893,17 @@ function renderContents() {
 
 function renderPage() {
   const entry = state.entries[state.currentPage];
-  if (!entry || !state.bookPackage) return;
+  if (!state.bookPackage) return;
+  if (!entry) {
+    $("#pageViewport").replaceChildren();
+    $("#currentPage").textContent = "0";
+    $("#totalPages").textContent = "0";
+    $("#currentLabel").textContent = "No entries";
+    $("#previousButton").disabled = $("#nextButton").disabled = true;
+    $("#sourceSlice").textContent = "";
+    renderContents();
+    return;
+  }
   const html = entry.blocks.map((block, blockIndex) => {
     if (block[sourceHidden]) return "";
     const content = renderPackageBlock(block, state.bookPackage.assets, state.currentPage, blockIndex);
@@ -1020,7 +1068,9 @@ function hasBundledImages(book) {
 function exportBook() {
   if (!state.bookPackage) return;
   const book = window.bookEditing?.exportPackage() || state.bookPackage;
-  const name = `${book.book.id}${$("#exportEdition").value === "player" ? "-player" : ""}`;
+  const importedName = book.source?.fileName?.split(/[\\/]/).pop();
+  const baseName = importedName?.replace(/\.(?:txt|md|markdown)$/i, "") || book.book.id;
+  const name = `${baseName}${$("#exportEdition").value === "player" ? "-player" : ""}`;
   if (hasBundledImages(book)) {
     prepareBookZip(book, name);
     return;
@@ -1077,10 +1127,11 @@ function parseMetadata(block) {
   return { title: get("title") || "Untitled book", description: get("description"), theme: get("theme") || "Homebrewery" };
 }
 
-function isStructuralLine(line) { return /^(#{1,6})\s+/.test(line) || /^!\[/.test(line) || /^\|.*\|$/.test(line) || /^[-*]\s+/.test(line) || line === "<!--COLUMN_BREAK-->" || /^<div\b/i.test(line) || /^---+$/.test(line); }
+function listItemText(line) { return line.match(/^(?:[-*+]|\d{1,9}[.)])\s+(\S.*)$/)?.[1] ?? null; }
+function isStructuralLine(line) { return /^(#{1,6})\s+/.test(line) || /^!\[/.test(line) || /^\|.*\|$/.test(line) || listItemText(line) !== null || line === "<!--COLUMN_BREAK-->" || /^<div\b/i.test(line) || /^---+$/.test(line); }
 function setStatus(message) { $("#sourceStatus").innerHTML = `<i></i> ${escapeHtml(message)}`; }
 function showNotice(message) { const notice = $("#notice"); notice.textContent = message; notice.hidden = false; setTimeout(() => { notice.hidden = true; }, 8000); }
-function stripMarkup(value) { return value.replace(/[*_`]/g, "").replace(/\{\{[^}]+\}\}/g, "").trim(); }
+function stripMarkup(value) { return unwrapHomebreweryText(value).replace(/[*_`]/g, "").trim(); }
 function slugify(value) { return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 function inlineMarkdown(value) { let html = escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>'); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }

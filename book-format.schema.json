@@ -120,7 +120,7 @@
     "list": {
       "type": "object",
       "required": ["type", "items"],
-      "properties": { "type": { "const": "list" }, "items": { "type": "array", "items": { "type": "string" } } },
+      "properties": { "type": { "const": "list" }, "items": { "type": "array", "items": { "type": "string" } }, "ordered": { "type": "boolean" }, "start": { "type": "integer", "minimum": 0 } },
       "additionalProperties": false
     },
     "table": {
