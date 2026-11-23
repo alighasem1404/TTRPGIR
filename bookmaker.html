@@ -20,9 +20,10 @@
         </div>
         <a class="file-loader" href="index.html">Open reader</a>
         <label class="file-loader" for="mdInput">Import Markdown</label>
+        <label class="file-loader" for="jsonInput">Open ZIP or JSON</label>
         <button id="exportButton" class="export-button" type="button" disabled>Export JSON</button>
         <input id="mdInput" type="file" accept=".txt,.md,text/plain,text/markdown" />
-        <input id="jsonInput" type="file" accept=".json,application/json" hidden />
+        <input id="jsonInput" type="file" accept=".json,.zip,application/json,application/zip,application/x-zip-compressed" hidden />
       </header>
 
       <main class="workspace maker-workspace">
@@ -283,9 +284,9 @@
     </div>
     <script src="image-viewer.js?v=1"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
-    <script src="book-archive.js?v=3"></script>
-    <script src="app.js?v=24"></script>
-    <script src="book-editing.js?v=8"></script>
+    <script src="book-archive.js?v=4"></script>
+    <script src="app.js?v=25"></script>
+    <script src="book-editing.js?v=9"></script>
     <script src="pdf-import.js?v=6" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
     <script src="image-recovery.js?v=6"></script>
   </body>

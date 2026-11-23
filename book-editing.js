@@ -748,7 +748,7 @@
     const asset = state.bookPackage.assets.find(({ id }) => id === block?.assetId);
     const recovered = block && state.previewImages.get(block);
     const defaultAlt = recovered?.caption ?? asset?.alt ?? "";
-    const imageSource = recovered?.url || asset?.src || "";
+    const imageSource = recovered?.url || state.bundledImages.get(asset?.src)?.url || asset?.src || "";
     const editableUrl = recovered ? "" : asset?.src || "";
     const width = /^\d+(?:\.\d+)?%$/.test(block?.width || "") ? block.width.slice(0, -1) : "";
     const scopes = add ? new Map() : editScope(entry, index);
@@ -846,7 +846,7 @@
     for (const { block } of targets) {
       const recovery = state.previewImages.get(block);
       const original = assets.get(block.assetId);
-      const source = changes.file || changes.url || recovery?.blob || original?.src;
+      const source = changes.file || changes.url || recovery?.blob || state.bundledImages.get(original?.src)?.blob || original?.src;
       let blob = changes.url ? null : recovery?.blob;
       if (changes.file || changes.crop || changes.fileName && !blob) {
         try {

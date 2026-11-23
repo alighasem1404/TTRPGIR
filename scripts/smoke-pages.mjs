@@ -205,6 +205,7 @@ async function smoke(width) {
       const images = [...document.querySelectorAll(".page-content img[src^='blob:']")];
       return images.length === 2 && images.every((image) => image.naturalWidth === 12);
     }, "Reader still renders original ZIPs containing PNGs");
+    await smokeReopenBook(browser, width, zip, legacy);
     for (const request of maker.requests) {
       assert.ok(["GET", "HEAD"].includes(request.method) && !request.hasPostData, "No file upload request");
       assert.doesNotMatch(request.url, /local-source-smoke/);
@@ -220,6 +221,98 @@ async function smoke(width) {
   } finally {
     browser.close();
   }
+}
+
+async function smokeReopenBook(browser, width, originalZip, legacyZip) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Maker ready to reopen exports");
+  const standalone = await maker.evaluate(() => JSON.stringify(state.bookPackage));
+  assert.equal(await maker.evaluate(() => document.querySelector('label[for="jsonInput"]').getBoundingClientRect().width > 0), true);
+  await maker.upload("jsonInput", "saved-book.zip", originalZip);
+  await maker.until(() => {
+    const images = [...document.querySelectorAll("#pageViewport img[src^='blob:']")];
+    return state.bundledImages.size === 2 && images.length === 2 && images.every((image) => image.naturalWidth === 16);
+  }, "Bookmaker reopens ZIP images without the original Markdown or PDF");
+  assert.equal(await maker.evaluate(() => document.getElementById("openHeadings").disabled), false);
+  assert.equal(await maker.evaluate(() => document.getElementById("exportButton").textContent), "Export Book ZIP");
+  const currentBook = await maker.evaluate(() => JSON.stringify(state.bookPackage));
+  for (const [name, data] of [["invalid.json", "{"], ["invalid.zip", [0, 1, 2]],
+    ["invalid-content.json", JSON.stringify({ format: "ttrpg-book", schemaVersion: 1, book: { id: "bad", title: "Bad" },
+      assets: [], entries: [{ id: "one", title: "One", blocks: [{ type: "table", columns: [], rows: ["invalid"] }] }] })]]) {
+    await maker.evaluate(() => { document.getElementById("notice").textContent = ""; });
+    await maker.upload("jsonInput", name, data);
+    await maker.until(() => document.getElementById("notice").textContent.startsWith("Could not open "), "Invalid book is rejected");
+    assert.ok((await maker.evaluate(() => document.getElementById("notice").textContent)).includes(name));
+    assert.equal(await maker.evaluate(() => JSON.stringify(state.bookPackage)), currentBook);
+    assert.equal(await maker.evaluate(() => state.bundledImages.size), 2);
+  }
+  await maker.evaluate(() => document.getElementById("exportButton").click());
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Unedited ZIP ready to export again");
+  const unchanged = await maker.evaluate(async () => {
+    const { bookPackage, images } = await window.bookArchive.open(zipExport.blob, validateBookPackage, new AbortController().signal);
+    const sameBytes = await Promise.all([...images].map(async ([path, blob]) => {
+      const previous = state.bundledImages.get(path)?.blob;
+      return previous && [...new Uint8Array(await previous.arrayBuffer())].join() === [...new Uint8Array(await blob.arrayBuffer())].join();
+    }));
+    document.getElementById("bookZipExport").close();
+    return { identical: JSON.stringify(bookPackage) === JSON.stringify(state.bookPackage), sameBytes };
+  });
+  assert.equal(unchanged.identical, true, "Re-export keeps the imported paths and asset IDs");
+  assert.deepEqual(unchanged.sameBytes, [true, true], "Re-export retains the exact WebP bytes");
+  await maker.evaluate(() => {
+    document.getElementById("toggleBookEditing").click();
+    document.querySelector("#pageViewport img").click();
+    const form = document.getElementById("bookEditingForm");
+    form.elements.caption.value = "Edited after reopening";
+    form.elements.fileName.value = "resumed-art";
+    form.elements.crop.checked = true;
+    form.elements.w.value = "50";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+  });
+  await maker.until(() => !document.getElementById("bookEditing").open &&
+    document.querySelector("#pageViewport img")?.naturalWidth === 8, "Crop editor reads an imported bundled image");
+  await maker.evaluate(() => document.getElementById("exportButton").click());
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Edited reopened ZIP ready");
+  const resumedZip = await maker.evaluate(async () => {
+    const bytes = [...new Uint8Array(await zipExport.blob.arrayBuffer())];
+    document.getElementById("bookZipExport").close();
+    return bytes;
+  });
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader ready for resumed book");
+  await reader.upload("jsonInput", "resumed-book.zip", resumedZip);
+  await reader.until(() => {
+    const images = [...document.querySelectorAll("#pageViewport img[src^='blob:']")];
+    return images.length === 2 && images[0].naturalWidth === 8 && images[1].naturalWidth === 16 &&
+      document.querySelector("#pageViewport figcaption").textContent === "Edited after reopening";
+  }, "Reader opens edited and unchanged images from a resumed ZIP");
+  await maker.upload("jsonInput", "older-png-book.zip", legacyZip);
+  await maker.until(() => state.bundledImages.size === 2 && document.querySelector("#pageViewport img")?.naturalWidth === 12,
+    "Bookmaker reopens older PNG ZIP files");
+  const oldUrls = await maker.evaluate(() => [...state.bundledImages.values()].map(({ url }) => url));
+  await maker.upload("jsonInput", "saved-book.json", standalone);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo" && !state.bundledImages.size, "Standalone JSON reopened");
+  const released = await maker.evaluate(async (urls) => Promise.all(urls.map((url) => fetch(url).then(() => false, () => true))), oldUrls);
+  assert.deepEqual(released, [true, true], "Replacing a book releases its bundled image URLs");
+  await maker.evaluate(() => {
+    document.getElementById("toggleBookEditing").click();
+    document.querySelector("#pageViewport [data-book-edit]").click();
+    const form = document.getElementById("bookEditingForm");
+    form.elements.text.value = "A reopened JSON heading";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+  });
+  assert.equal(await maker.evaluate(() => state.entries[0].blocks.find(({ type }) => type === "heading").text), "A reopened JSON heading");
+  await maker.evaluate((zip, json) => {
+    const input = document.getElementById("jsonInput");
+    for (const [name, content] of [["slow.zip", Uint8Array.from(zip)], ["latest.json", json]]) {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([content], name));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change"));
+    }
+  }, originalZip, standalone);
+  await maker.until(() => document.getElementById("sourceStatus").textContent.includes("latest.json") && !state.bundledImages.size,
+    "A later JSON import wins over an unfinished ZIP import");
 }
 
 async function inspectPdfDownload(maker, crop) {

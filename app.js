@@ -13,6 +13,7 @@ const state = {
   headingHistory: [],
   imageSlots: [],
   recoveredImages: new Map(),
+  bundledImages: new Map(),
   previewImages: new WeakMap()
 };
 
@@ -27,6 +28,7 @@ let editedImageId = 0;
 let headingDraft;
 let importVersion = 0;
 let zipExport;
+let bookImport;
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#previousButton").addEventListener("click", () => goToPage(state.currentPage - 1));
@@ -36,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderContents();
   });
   $("#mdInput").addEventListener("change", loadSelectedMarkdown);
-  $("#jsonInput").addEventListener("change", loadSelectedJson);
+  $("#jsonInput").addEventListener("change", loadSelectedBook);
   $("#exportButton").addEventListener("click", exportBook);
   $("#downloadBookZip").addEventListener("click", downloadBookZip);
   $("#bookZipExport").addEventListener("close", (event) => {
@@ -82,6 +84,8 @@ async function loadSource() {
 function loadSelectedMarkdown(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  event.target.value = "";
+  bookImport?.abort();
   const version = ++importVersion;
   const reader = new FileReader();
   const config = file.name.toLowerCase() === "euphoria demo.txt" ? state.config : standardConversionConfig();
@@ -104,24 +108,28 @@ function standardConversionConfig() {
   };
 }
 
-function loadSelectedJson(event) {
+async function loadSelectedBook(event) {
   const file = event.target.files?.[0];
   if (!file) return;
+  event.target.value = "";
+  bookImport?.abort();
+  const request = new AbortController();
+  bookImport = request;
   const version = ++importVersion;
-  const reader = new FileReader();
-  reader.addEventListener("load", () => {
+  try {
+    const { bookPackage, images } = /\.zip$/i.test(file.name)
+      ? await window.bookArchive.open(file, validateBookPackage, request.signal)
+      : { bookPackage: JSON.parse(await file.text()) };
+    request.signal.throwIfAborted();
     if (version !== importVersion) return;
-    try {
-      const bookPackage = JSON.parse(String(reader.result));
-      validateBookPackage(bookPackage);
-      state.sourceTheme = bookPackage.theme;
-      state.paletteMode = "custom";
-      loadPackage(bookPackage, file.name);
-    } catch (error) {
-      showNotice(`Could not load this book JSON: ${error.message}`);
-    }
-  });
-  reader.readAsText(file);
+    validateBookPackage(bookPackage);
+    state.sourceTheme = bookPackage.theme;
+    state.paletteMode = "custom";
+    const config = { rules: { entryHeadingLevel: bookPackage.conversion?.entryHeadingLevel || 2 } };
+    loadPackage(bookPackage, file.name, "", config, images);
+  } catch (error) {
+    if (!request.signal.aborted && version === importVersion) showNotice(`Could not open ${file.name}. ${error.message}`);
+  }
 }
 
 function loadDocument(source, fileName, config = {}) {
@@ -132,7 +140,15 @@ function loadDocument(source, fileName, config = {}) {
   loadPackage(bookPackage, fileName, source, config);
 }
 
-function loadPackage(bookPackage, fileName, source = "", config = {}) {
+function loadPackage(bookPackage, fileName, source = "", config = {}, images = new Map()) {
+  const bundledImages = new Map();
+  try {
+    for (const [path, blob] of images) bundledImages.set(path, { blob, url: URL.createObjectURL(blob) });
+  } catch (error) {
+    for (const image of bundledImages.values()) URL.revokeObjectURL(image.url);
+    throw error;
+  }
+  const previousImages = state.bundledImages;
   if ($("#headingEditor").open) $("#headingEditor").close();
   if ($("#bookZipExport").open) $("#bookZipExport").close();
   window.bookmakerPdf?.setMarkdownAvailable(Boolean(source));
@@ -143,9 +159,12 @@ function loadPackage(bookPackage, fileName, source = "", config = {}) {
   window.bookEditing?.reset();
   $("#undoHeadings").disabled = true;
   state.bookPackage = bookPackage;
+  state.bundledImages = bundledImages;
   state.entries = bookPackage.entries || [];
   state.source = source;
   state.config = config;
+  state.search = "";
+  $("#searchInput").value = "";
   if (state.visualEdits) refreshEditedImageSlots();
   else refreshImageSlots();
   $("#openHeadings").disabled = state.visualEdits
@@ -156,9 +175,11 @@ function loadPackage(bookPackage, fileName, source = "", config = {}) {
   applyPackageMeta(bookPackage);
   renderContents();
   renderPage();
+  $(".reader-stage").scrollTo({ top: 0, left: 0 });
   setStatus(`Loaded ${fileName}`);
   $("#exportButton").disabled = false;
   updateExportLabel();
+  for (const image of previousImages.values()) URL.revokeObjectURL(image.url);
 }
 
 function openHeadingEditor() {
@@ -858,14 +879,18 @@ function renderPackageBlock(block, assets, entryIndex, blockIndex) {
   if (block.type === "divider") return block.style === "rule" ? '<hr class="book-rule">' : `<div class="column-marker" aria-hidden="true"></div>`;
   if (block.type === "image") {
     const recovery = state.previewImages.get(block);
-    const asset = recovery ? { src: recovery.url, alt: recovery.caption } : assets.find((candidate) => candidate.id === block.assetId);
+    const original = assets.find((candidate) => candidate.id === block.assetId);
+    const asset = recovery ? { src: recovery.url, alt: recovery.caption } : original && {
+      ...original, src: state.bundledImages.get(original.src)?.url || original.src
+    };
     if (!asset) return "";
     const semanticClass = block.role === "emblem" ? " entry-emblem" : "";
     const placementClass = block.placement === "entry-top-right" ? " entry-emblem--top-right" : "";
     const customClass = block.className ? ` ${block.className.replace(/[^a-z0-9_-]/gi, "")}` : "";
     const className = `${semanticClass}${placementClass}${customClass}`;
     const width = block.width ? ` style="width:${escapeAttribute(block.width)}"` : "";
-    const loading = recovery ? `data-recovered-block="${blockIndex}" loading="eager"` : 'loading="lazy"';
+    const loading = recovery ? `data-recovered-block="${blockIndex}" loading="eager"`
+      : state.bundledImages.has(original?.src) ? 'loading="eager"' : 'loading="lazy"';
     const alt = block.alt ?? asset.alt;
     const caption = recovery?.caption ?? block.caption ?? asset.alt;
     return `<figure class="page-art page-art--flow${className}"${width}><span class="image-frame"><img src="${escapeAttribute(asset.src)}" alt="${escapeAttribute(alt)}" aria-haspopup="dialog" aria-label="View larger image: ${escapeAttribute(alt)}" data-image-viewer tabindex="0" ${loading}></span>${caption ? `<figcaption>${inlineMarkdown(caption)}</figcaption>` : ""}</figure>`;
@@ -1062,7 +1087,10 @@ function updateExportLabel() {
 }
 
 function hasBundledImages(book) {
-  return state.recoveredImages.size > 0 && book?.entries.some((entry) => entry.blocks.some((block) => state.previewImages.has(block)));
+  if (!book) return false;
+  const sources = new Map(book.assets.map(({ id, src }) => [id, src]));
+  return book.entries.some((entry) => entry.blocks.some((block) => block.type === "image" &&
+    (state.previewImages.has(block) || state.bundledImages.has(sources.get(block.assetId)))));
 }
 
 function exportBook() {
@@ -1089,11 +1117,12 @@ async function prepareBookZip(book, name) {
   download.disabled = true;
   dialog.showModal();
   try {
-    const { blob, imageCount } = await window.bookArchive.create(book, (block) => state.previewImages.get(block));
+    const bundledFiles = new Map([...state.bundledImages].map(([path, image]) => [path, image.blob]));
+    const { blob, imageCount } = await window.bookArchive.create(book, (block) => state.previewImages.get(block), bundledFiles);
     if (zipExport !== current || !dialog.open) return;
     current.blob = blob;
     const size = blob.size >= 1024 ** 2 ? `${(blob.size / 1024 ** 2).toFixed(1)} MiB` : `${(blob.size / 1024).toFixed(1)} KiB`;
-    status.textContent = `${current.fileName} · ${size} · ${imageCount} recovered image${imageCount === 1 ? "" : "s"}`;
+    status.textContent = `${current.fileName} · ${size} · ${imageCount} bundled image${imageCount === 1 ? "" : "s"}`;
     download.disabled = false;
   } catch (error) {
     if (zipExport === current && dialog.open) status.textContent = `Could not prepare the ZIP. ${error.message}`;
@@ -1120,6 +1149,35 @@ function validateBookPackage(bookPackage) {
   if (!bookPackage || bookPackage.format !== "ttrpg-book") throw new Error("The file is not a ttrpg-book package.");
   if (!Number.isInteger(bookPackage.schemaVersion)) throw new Error("The package is missing schemaVersion.");
   if (!bookPackage.book?.title || !Array.isArray(bookPackage.entries) || !Array.isArray(bookPackage.assets)) throw new Error("The package is missing book, entries, or assets.");
+  if (typeof bookPackage.book.title !== "string" || typeof bookPackage.book.id !== "string") throw new Error("The book title or ID is invalid.");
+  const assets = new Set();
+  for (const asset of bookPackage.assets) {
+    if (!asset || typeof asset.id !== "string" || typeof asset.src !== "string" || typeof asset.alt !== "string" || assets.has(asset.id)) {
+      throw new Error("An image asset has an invalid or duplicate ID, source, or alt text.");
+    }
+    assets.add(asset.id);
+  }
+  const entryIds = new Set();
+  const strings = (values) => Array.isArray(values) && values.every((value) => typeof value === "string");
+  for (const entry of bookPackage.entries) {
+    if (!entry || typeof entry.id !== "string" || typeof entry.title !== "string" || !Array.isArray(entry.blocks) || entryIds.has(entry.id)) {
+      throw new Error("An entry has an invalid or duplicate ID, title, or content.");
+    }
+    entryIds.add(entry.id);
+    for (const block of entry.blocks) {
+      if (!block || typeof block.type !== "string") throw new Error("An entry contains an invalid content block.");
+      const textValid = !["heading", "paragraph"].includes(block.type) || typeof block.text === "string";
+      const headingValid = block.type !== "heading" || Number.isInteger(block.level) && block.level >= 1 && block.level <= 6;
+      const listValid = block.type !== "list" || strings(block.items) && (block.ordered === undefined || typeof block.ordered === "boolean") &&
+        (block.start === undefined || Number.isSafeInteger(block.start) && block.start >= 0);
+      const tableValid = block.type !== "table" || strings(block.columns) && Array.isArray(block.rows) && block.rows.every(strings);
+      const imageValid = block.type !== "image" || assets.has(block.assetId) && [block.caption, block.alt, block.className, block.width]
+        .every((value) => value === undefined || typeof value === "string");
+      const videoValid = block.type !== "embed" || block.kind !== "video-grid" || typeof block.title === "string" &&
+        Array.isArray(block.items) && block.items.every((item) => item && typeof item.url === "string" && typeof item.thumbnail === "string");
+      if (!textValid || !headingValid || !listValid || !tableValid || !imageValid || !videoValid) throw new Error(`Invalid content in ${entry.title}.`);
+    }
+  }
 }
 
 function parseMetadata(block) {

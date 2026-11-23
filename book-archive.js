@@ -46,8 +46,8 @@
     return paths;
   }
 
-  async function create(book, recoveryForBlock) {
-    const { output, files } = prepareBook(book, recoveryForBlock);
+  async function create(book, recoveryForBlock, bundledFiles = new Map()) {
+    const { output, files } = prepareBook(book, recoveryForBlock, bundledFiles);
     const json = JSON.stringify(output, null, 2);
     const bookSize = new Blob([json]).size;
     if (bookSize > MAX_BOOK_BYTES) throw new Error("The book JSON exceeds 32 MiB.");
@@ -66,7 +66,7 @@
     return { blob, imageCount: files.size };
   }
 
-  function prepareBook(book, recoveryForBlock) {
+  function prepareBook(book, recoveryForBlock, bundledFiles) {
     const originals = new Map(book.assets.map((asset) => [asset.id, asset]));
     const reservedPaths = reservedImagePaths(book.assets);
     const usedIds = new Set(originals.keys());
@@ -81,6 +81,8 @@
         const recovery = recoveryForBlock(block);
         if (!recovery) {
           referencedIds.add(block.assetId);
+          const path = originals.get(block.assetId)?.src;
+          if (bundledFiles.has(path)) files.set(path, bundledFiles.get(path));
           return block;
         }
         const original = originals.get(block.assetId);
@@ -126,7 +128,7 @@
     const paths = new Set(bookPackage.assets.map(({ src }) => src).filter(imagePath));
     for (const path of paths) {
       const member = zip.file(path);
-      if (!member) continue;
+      if (!member) throw new Error(`The ZIP is missing ${path}.`);
       if (member.unsafeOriginalName !== path) throw new Error(`Invalid path for ${path}.`);
       const extension = imagePath(path)[1].toLowerCase();
       const image = await readEntry(member, remaining, signal, `image/${extension}`);
