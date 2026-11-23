@@ -151,7 +151,7 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
   const previousImages = state.bundledImages;
   if ($("#headingEditor").open) $("#headingEditor").close();
   if ($("#bookZipExport").open) $("#bookZipExport").close();
-  window.bookmakerPdf?.setMarkdownAvailable(Boolean(source));
+  window.bookmakerPdf?.setBookAvailable(Boolean(bookPackage));
   for (const image of state.recoveredImages.values()) URL.revokeObjectURL(image.url);
   state.recoveredImages.clear();
   state.headingHistory.length = 0;

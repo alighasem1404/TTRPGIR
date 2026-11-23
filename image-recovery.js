@@ -211,7 +211,7 @@
   function checkImageLink(url, signal) {
     return new Promise((resolve) => {
       let source;
-      try { source = new URL(url, document.baseURI); } catch { return resolve("broken"); }
+      try { source = new URL(state.bundledImages.get(url)?.url || url, document.baseURI); } catch { return resolve("broken"); }
       if (!["https:", "http:", "data:", "file:", "blob:"].includes(source.protocol)) return resolve("broken");
       const image = new Image();
       const cancel = () => finish("unverified");

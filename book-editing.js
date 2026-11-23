@@ -11,6 +11,7 @@
   let hiddenSections;
   let active = false;
   let releaseImagePreview;
+  let draggedOrder;
   const replacementHistory = [];
 
   window.bookEditing = { reset, wrapBlock, exportPackage, clearReplacementHistory, get active() { return active; } };
@@ -1046,43 +1047,53 @@
     if (!currentEntry()) return;
     const entry = currentEntry();
     const entries = [...state.entries];
-    const parts = splitSections(entry.blocks);
-    const sections = parts.filter((part) => part.title);
-    const removedBlocks = new Set();
-    const headings = entry.blocks.flatMap((block, index) => block.type === "heading" && index > 0 ? [{ title: block.text, block, index }] : []);
+    let draftBlocks = [...entry.blocks];
     let scope = "entries";
     open("Organize book", `
       <label>Organize <select name="scope"><option value="entries">Book entries</option><option value="sections">Sections in ${escapeHtml(entry.title)}</option><option value="headings">Headings and content in this entry</option></select></label>
       <p>Remove deletes the heading and all its content when you apply changes. Close to discard pending changes.</p>
+      <p id="headingOrderHint" hidden>Move a heading with its content and subheadings using the arrows or drag it beside another heading in the same group.</p>
       <button id="sortBookEntries" type="button">Sort alphabetically</button>
       <ol id="bookOrderRows" class="book-order-list" aria-label="Order"></ol>
       <div class="book-edit-actions"><button type="submit" value="save">Apply changes</button></div>`, () => {
-      const blocks = orderSections(parts, sections).filter((block) => !removedBlocks.has(block));
-      save(entries.map((item) => item === entry ? { ...item, blocks } : item), "Book organization updated.");
+      save(entries.map((item) => item === entry ? { ...item, blocks: draftBlocks } : item), "Book organization updated.");
     });
     const render = () => {
-      const items = scope === "entries" ? entries : scope === "sections" ? sections.filter(({ blocks }) => !removedBlocks.has(blocks[0]))
-        : headings.filter(({ block }) => !removedBlocks.has(block));
-      renderOrder($("#bookOrderRows"), items, ({ title }) => title, (row, item) => {
+      $("#headingOrderHint").hidden = scope !== "headings";
+      const list = $("#bookOrderRows");
+      if (scope === "headings") {
+        const root = headingGroups(draftBlocks);
+        const sync = () => { draftBlocks = flattenHeadingGroup(root); };
+        const renderGroups = (list, parent) => renderOrder(list, parent.children, ({ heading }) => heading.text, (row, group) => {
+          const level = document.createElement("small");
+          level.textContent = `H${group.heading.level} `;
+          row.firstElementChild.prepend(level);
+          row.append(editorButton("Remove", `Remove ${group.heading.text} and content`, () => {
+            parent.children.splice(parent.children.indexOf(group), 1);
+            sync();
+            render();
+          }));
+          if (group.children.length) {
+            const children = document.createElement("ol");
+            children.className = "book-order-list book-heading-children";
+            children.setAttribute("aria-label", `${group.heading.text} subheadings`);
+            row.append(children);
+            renderGroups(children, group);
+          }
+        }, sync);
+        renderGroups(list, root);
+        return;
+      }
+      const parts = splitSections(draftBlocks);
+      const items = scope === "entries" ? entries : parts.filter((part) => part.title);
+      renderOrder(list, items, ({ title }) => title, (row, item) => {
         row.append(editorButton("Remove", `Remove ${item.title} and content`, () => {
           if (scope === "entries") entries.splice(entries.indexOf(item), 1);
-          else {
-            const block = scope === "sections" ? item.blocks[0] : item.block;
-            const start = entry.blocks.indexOf(block);
-            let end = start + 1;
-            while (end < entry.blocks.length && !(entry.blocks[end].type === "heading" && entry.blocks[end].level <= block.level)) end += 1;
-            for (const removed of entry.blocks.slice(start, end)) removedBlocks.add(removed);
-          }
+          else draftBlocks = draftBlocks.filter((block) => !item.blocks.includes(block));
           render();
         }));
-      }, scope === "headings" ? null : (ordered) => {
-        if (scope === "sections") {
-          // Retain removed sections in their slots until the staged deletion is applied.
-          let index = 0;
-          for (let position = 0; position < sections.length; position += 1) {
-            if (!removedBlocks.has(sections[position].blocks[0])) sections[position] = ordered[index++];
-          }
-        }
+      }, (ordered) => {
+        if (scope === "sections") draftBlocks = orderSections(parts, ordered);
       });
     };
     form.elements.scope.addEventListener("change", () => {
@@ -1095,6 +1106,26 @@
       render();
     });
     render();
+  }
+
+  function headingGroups(blocks) {
+    const root = { blocks: [], children: [] };
+    const stack = [root];
+    for (const [index, block] of blocks.entries()) {
+      if (block.type !== "heading" || index === 0) {
+        stack.at(-1).blocks.push(block);
+        continue;
+      }
+      while (stack.length > 1 && stack.at(-1).heading.level >= block.level) stack.pop();
+      const group = { heading: block, blocks: [block], children: [] };
+      stack.at(-1).children.push(group);
+      stack.push(group);
+    }
+    return root;
+  }
+
+  function flattenHeadingGroup(group) {
+    return [...group.blocks, ...group.children.flatMap(flattenHeadingGroup)];
   }
 
   function renderOrder(list, items, title, extra = () => {}, onOrder) {
@@ -1110,25 +1141,30 @@
       row.draggable = true;
       row.innerHTML = `<span>${escapeHtml(title(item))}</span><button type="button" aria-label="Move ${escapeAttribute(title(item))} up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" aria-label="Move ${escapeAttribute(title(item))} down" ${index === items.length - 1 ? "disabled" : ""}>↓</button>`;
       const [, up, down] = row.children;
-      if (onOrder === null) {
-        up.hidden = down.hidden = true;
-        row.draggable = false;
-      }
       for (const [button, offset] of [[up, -1], [down, 1]]) button.addEventListener("click", () => {
         move(index, index + offset);
         const controls = list.children[index + offset].querySelectorAll("button:not(:disabled)");
         controls[0]?.focus();
       });
-      row.addEventListener("dragstart", (event) => event.dataTransfer.setData("application/x-book-order", String(index)));
+      row.addEventListener("dragstart", (event) => {
+        event.stopPropagation();
+        draggedOrder = { list, index };
+        event.dataTransfer.setData("application/x-book-order", String(index));
+      });
+      row.addEventListener("dragend", (event) => {
+        event.stopPropagation();
+        draggedOrder = null;
+      });
       row.addEventListener("dragover", (event) => {
-        if (onOrder === null) return;
-        if (event.dataTransfer.types.includes("application/x-book-order")) event.preventDefault();
+        event.stopPropagation();
+        if (draggedOrder?.list === list) event.preventDefault();
       });
       row.addEventListener("drop", (event) => {
-        if (onOrder === null) return;
+        event.stopPropagation();
+        if (draggedOrder?.list !== list) return;
         event.preventDefault();
-        const from = event.dataTransfer.getData("application/x-book-order");
-        if (from) move(Number(from), index);
+        move(draggedOrder.index, index);
+        draggedOrder = null;
       });
       extra(row, item);
       return row;

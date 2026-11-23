@@ -218,6 +218,7 @@ async function smoke(width) {
     await smokeTableAndListEditing(browser, width);
     await smokeFindAndReplace(browser, width);
     await smokeOrganizationAndCaptions(browser, width);
+    await smokeHeadingGroupOrdering(browser, width);
   } finally {
     browser.close();
   }
@@ -235,6 +236,14 @@ async function smokeReopenBook(browser, width, originalZip, legacyZip) {
   }, "Bookmaker reopens ZIP images without the original Markdown or PDF");
   assert.equal(await maker.evaluate(() => document.getElementById("openHeadings").disabled), false);
   assert.equal(await maker.evaluate(() => document.getElementById("exportButton").textContent), "Export Book ZIP");
+  assert.equal(await maker.evaluate(() => document.getElementById("attachPdf").disabled), false);
+  await maker.upload("pdfInput", "reopened-zip.pdf", [...fixturePdf()]);
+  await maker.until(() => document.getElementById("imageRecovery").open && !document.getElementById("recoverySetup").hidden,
+    "PDF attachment opens after a ZIP import");
+  await maker.evaluate(() => document.getElementById("recoverySetup").requestSubmit());
+  await maker.until(() => document.getElementById("recoveryStatus").textContent.includes("2 working") &&
+    document.getElementById("recoveryReview").hidden, "Bundled ZIP images are recognized as working during PDF recovery");
+  await maker.evaluate(() => document.getElementById("imageRecovery").close());
   const currentBook = await maker.evaluate(() => JSON.stringify(state.bookPackage));
   for (const [name, data] of [["invalid.json", "{"], ["invalid.zip", [0, 1, 2]],
     ["invalid-content.json", JSON.stringify({ format: "ttrpg-book", schemaVersion: 1, book: { id: "bad", title: "Bad" },
@@ -292,6 +301,14 @@ async function smokeReopenBook(browser, width, originalZip, legacyZip) {
   const oldUrls = await maker.evaluate(() => [...state.bundledImages.values()].map(({ url }) => url));
   await maker.upload("jsonInput", "saved-book.json", standalone);
   await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo" && !state.bundledImages.size, "Standalone JSON reopened");
+  assert.equal(await maker.evaluate(() => document.getElementById("attachPdf").disabled), false);
+  await maker.upload("pdfInput", "reopened-json.pdf", [...fixturePdf()]);
+  await maker.until(() => document.getElementById("imageRecovery").open, "PDF attachment opens after a JSON import");
+  await maker.evaluate(() => document.getElementById("imageRecovery").close());
+  await maker.evaluate(() => document.getElementById("reviewPdf").click());
+  await maker.until(() => document.getElementById("pdfInspector").open && !document.getElementById("pdfPageBody").hidden,
+    "Matching PDF renders beside a reopened JSON book");
+  await maker.evaluate(() => document.getElementById("pdfInspector").close());
   const released = await maker.evaluate(async (urls) => Promise.all(urls.map((url) => fetch(url).then(() => false, () => true))), oldUrls);
   assert.deepEqual(released, [true, true], "Replacing a book releases its bundled image URLs");
   await maker.evaluate(() => {
@@ -891,6 +908,78 @@ async function smokeOrganizationAndCaptions(browser, width) {
     !document.getElementById("pageViewport").textContent, "Reader clears the previous book after every entry was removed");
 }
 
+async function smokeHeadingGroupOrdering(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Heading group ordering demo");
+  await maker.upload("mdInput", "heading-order.md", [
+    "## First", "Entry introduction.", "### Alpha", "Alpha introduction.", "#### A1", "A1 content.",
+    "![Alpha art](missing-alpha.png)", "##### A1 child", "Deep child content.", "#### A2", "Remove A2 content.",
+    "### Beta", "Beta introduction.", "#### B1", "B1 content.", "### Gamma", "Gamma content.", "## Second", "Second entry content."
+  ].join("\n"));
+  await maker.until(() => state.entries[0]?.title === "First", "Nested heading fixture ready");
+  const result = await maker.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 9;
+    updateImageRecovery(state.imageSlots[0], { blob: await window.bookArchive.encodeWebp(canvas), fileName: "alpha-art.webp", caption: "Alpha figure" });
+    const form = document.getElementById("bookEditingForm");
+    const scope = (value) => {
+      form.elements.scope.value = value;
+      form.elements.scope.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const move = (heading, direction) => form.querySelector(`[aria-label="Move ${heading} ${direction}"]`).click();
+    const open = () => { document.getElementById("organizeBook").click(); scope("headings"); };
+    const original = JSON.stringify(state.entries);
+    open();
+    move("Beta", "up");
+    document.getElementById("bookEditing").close();
+    const canceled = original === JSON.stringify(state.entries);
+    open();
+    move("A2", "up");
+    move("Beta", "up");
+    const row = (name) => form.querySelector(`[aria-label="Remove ${name} and content"]`).closest("li");
+    const drag = (from, to) => {
+      const transfer = new DataTransfer();
+      const source = row(from);
+      const target = row(to);
+      source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: transfer }));
+      target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      source.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: transfer }));
+    };
+    drag("A1", "A2");
+    const childOrder = [...row("Alpha").querySelector("ol").children].map((item) => item.firstElementChild.textContent.trim());
+    const beforeCrossGroup = form.querySelector("#bookOrderRows").textContent;
+    drag("B1", "A2");
+    const crossGroupUnchanged = form.querySelector("#bookOrderRows").textContent === beforeCrossGroup;
+    form.querySelector('[aria-label="Remove A2 and content"]').click();
+    move("Alpha", "down");
+    scope("sections");
+    move("Alpha", "up");
+    scope("headings");
+    const staged = original === JSON.stringify(state.entries);
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    const blocks = state.entries[0].blocks.map((block) => block.text || block.type);
+    const packageData = window.bookEditing.exportPackage();
+    document.getElementById("exportButton").click();
+    return { canceled, childOrder, crossGroupUnchanged, staged, blocks, packageData };
+  });
+  assert.equal(result.canceled, true);
+  assert.deepEqual(result.childOrder, ["H4 A1", "H4 A2"]);
+  assert.equal(result.crossGroupUnchanged, true);
+  assert.equal(result.staged, true);
+  assert.deepEqual(result.blocks, ["First", "Entry introduction.", "Beta", "Beta introduction.", "B1", "B1 content.",
+    "Alpha", "Alpha introduction.", "A1", "A1 content.", "image", "A1 child", "Deep child content.", "Gamma", "Gamma content."]);
+  assert.equal(result.packageData.entries[1].title, "Second");
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Moved heading ZIP ready");
+  const zip = await maker.evaluate(async () => [...new Uint8Array(await zipExport.blob.arrayBuffer())]);
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader ready for moved headings");
+  await reader.upload("jsonInput", "moved-headings.zip", zip);
+  await reader.until(() => document.querySelector('#pageViewport img')?.naturalWidth === 9, "Moved illustration survives export");
+  assert.deepEqual(await reader.evaluate(() => [...document.querySelectorAll("#pageViewport h3")].map(({ textContent }) => textContent)), ["Beta", "Alpha", "Gamma"]);
+  assert.deepEqual(await reader.evaluate(() => readerState.entries[0].blocks.map((block) => block.text || block.type)), result.blocks);
+}
+
 function startChrome() {
   const executable = process.env.CHROME_BIN || (process.platform === "win32"
     ? "C:/Program Files/Google/Chrome/Application/chrome.exe" : "google-chrome");
@@ -963,13 +1052,16 @@ function startChrome() {
       await until(() => document.readyState === "complete" && location.protocol !== "about:", file);
       return {
         evaluate, until, requests,
-        upload: (id, name, bytes) => evaluate((id, name, bytes) => {
+        upload: async (id, name, bytes) => {
+          await send("Page.bringToFront");
+          return evaluate((id, name, bytes) => {
           const input = document.getElementById(id);
           const transfer = new DataTransfer();
           transfer.items.add(new File([Array.isArray(bytes) ? Uint8Array.from(bytes) : bytes], name));
           input.files = transfer.files;
           input.dispatchEvent(new Event("change"));
-        }, id, name, bytes)
+          }, id, name, bytes);
+        }
       };
     }
   };

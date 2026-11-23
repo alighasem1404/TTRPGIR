@@ -178,6 +178,7 @@ button { cursor: pointer; }
 .book-order-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .book-order-list li[draggable] { cursor: grab; }
 .book-order-list li > span { flex: 1 1 36%; overflow-wrap: anywhere; }
+.book-heading-children { flex: 1 0 100%; min-width: 0; padding-inline-start: 16px; border-inline-start: 1px solid var(--gold-dark); }
 .book-source-list li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .book-source-list small { display: block; color: var(--ink-soft); }
 .book-edit-block { display: flow-root; margin-block: 4px; padding: 2px 5px; border: 1px solid transparent; }

@@ -24,7 +24,7 @@
   let pageNavigation;
 
   window.bookmakerPdf = {
-    setMarkdownAvailable(available) {
+    setBookAvailable(available) {
       detachPdf();
       byId("attachPdf").disabled = !available;
     },
