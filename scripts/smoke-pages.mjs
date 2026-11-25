@@ -219,6 +219,7 @@ async function smoke(width) {
     await smokeFindAndReplace(browser, width);
     await smokeOrganizationAndCaptions(browser, width);
     await smokeHeadingGroupOrdering(browser, width);
+    await smokeImageReload(browser, width);
   } finally {
     browser.close();
   }
@@ -980,6 +981,65 @@ async function smokeHeadingGroupOrdering(browser, width) {
   assert.deepEqual(await reader.evaluate(() => readerState.entries[0].blocks.map((block) => block.text || block.type)), result.blocks);
 }
 
+async function smokeImageReload(browser, width) {
+  const failedSource = "https://bookmaker-image.test/art.png";
+  for (const page of ["bookmaker.html", "index.html"]) {
+    const tab = await browser.page(page, width);
+    await tab.until(() => document.getElementById("sourceStatus").textContent.includes("Loaded"), "Book ready for image reload");
+    const imageData = await tab.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 8;
+      canvas.height = 6;
+      return canvas.toDataURL("image/png").split(",")[1];
+    });
+    let available = false;
+    let imageRequests = 0;
+    await tab.interceptImages("https://bookmaker-image.test/*", () => {
+      imageRequests += 1;
+      return available ? { responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "image/png" }], body: imageData }
+        : { responseCode: 503, responseHeaders: [{ name: "Cache-Control", value: "max-age=600" }] };
+    });
+    const fixture = await tab.evaluate((source, data) => {
+      const book = (typeof state === "undefined" ? readerState : state).bookPackage;
+      return JSON.stringify({ ...book, entries: [{ id: "reload-test", title: "Reload test", order: 0, blocks: [
+        { type: "paragraph", text: "Preserve this paragraph." },
+        { type: "image", assetId: "healthy", role: "illustration", placement: "inline" },
+        { type: "image", assetId: "failed", role: "illustration", placement: "inline" }
+      ] }], assets: [
+        { id: "healthy", src: `data:image/png;base64,${data}`, alt: "Loaded art", role: "illustration" },
+        { id: "failed", src: source, alt: "Retry art", role: "illustration" }
+      ] });
+    }, failedSource, imageData);
+    await tab.upload("jsonInput", "image-reload.json", fixture);
+    await tab.until(() => document.getElementById("currentLabel").textContent === "Reload test", "Image retry fixture loaded");
+    const original = await tab.evaluate(() => {
+      const content = document.querySelector("#pageViewport .page-content");
+      content.querySelector('img[alt="Loaded art"]').id = "reload-healthy";
+      content.querySelector('img[alt="Retry art"]').id = "reload-missing";
+      content.querySelectorAll("img").forEach((image) => { image.loading = "eager"; });
+      document.getElementById("searchInput").value = "Keep my search";
+      content.dataset.reloadCheck = "keep this entry";
+      return document.getElementById("currentLabel").textContent;
+    });
+    await tab.until(() => document.querySelector("#reload-missing")?.complete && !document.querySelector("#reload-missing").naturalWidth &&
+      document.querySelector("#reload-healthy")?.naturalWidth === 8, "One image fails and one loads");
+    const requestsBefore = imageRequests;
+    available = true;
+    await tab.evaluate(() => document.getElementById("reloadImages").click());
+    await tab.until(() => document.querySelector("#reload-missing")?.naturalWidth === 8 &&
+      document.getElementById("notice").textContent.includes("1 of 1 images loaded."), "Failed image retries successfully");
+    assert.ok(imageRequests > requestsBefore, "Retry makes a fresh request for the failed image");
+    const unchanged = await tab.evaluate(() => ({
+      entry: document.getElementById("currentLabel").textContent,
+      search: document.getElementById("searchInput").value,
+      marker: document.querySelector("#pageViewport .page-content").dataset.reloadCheck,
+      healthy: document.getElementById("reload-healthy").getAttribute("src"),
+      visible: document.getElementById("reloadImages").getBoundingClientRect().right <= innerWidth
+    }));
+    assert.deepEqual(unchanged, { entry: original, search: "Keep my search", marker: "keep this entry", healthy: `data:image/png;base64,${imageData}`, visible: true });
+  }
+}
+
 function startChrome() {
   const executable = process.env.CHROME_BIN || (process.platform === "win32"
     ? "C:/Program Files/Google/Chrome/Application/chrome.exe" : "google-chrome");
@@ -988,6 +1048,7 @@ function startChrome() {
   const child = spawn(executable, [...args, "about:blank"], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] });
   const pending = new Map();
   const requestLogs = new Map();
+  const imageInterceptors = new Map();
   let id = 0;
   let buffer = "";
   let spawnError;
@@ -1001,6 +1062,10 @@ function startChrome() {
       buffer = buffer.slice(end + 1);
       if (message.method === "Network.requestWillBeSent") {
         requestLogs.get(message.sessionId)?.push(message.params.request);
+      }
+      if (message.method === "Fetch.requestPaused") {
+        const handler = imageInterceptors.get(message.sessionId);
+        if (handler) call("Fetch.fulfillRequest", { requestId: message.params.requestId, ...handler(message.params.request) }, message.sessionId).catch(() => {});
       }
       pending.get(message.id)?.(message);
     }
@@ -1052,6 +1117,10 @@ function startChrome() {
       await until(() => document.readyState === "complete" && location.protocol !== "about:", file);
       return {
         evaluate, until, requests,
+        async interceptImages(pattern, handler) {
+          imageInterceptors.set(sessionId, handler);
+          await send("Fetch.enable", { patterns: [{ urlPattern: pattern, resourceType: "Image" }] });
+        },
         upload: async (id, name, bytes) => {
           await send("Page.bringToFront");
           return evaluate((id, name, bytes) => {

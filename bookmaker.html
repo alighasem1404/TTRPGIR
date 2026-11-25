@@ -21,6 +21,7 @@
         <a class="file-loader" href="index.html">Open reader</a>
         <label class="file-loader" for="mdInput">Import Markdown</label>
         <label class="file-loader" for="jsonInput">Open ZIP or JSON</label>
+        <button id="reloadImages" class="file-loader" type="button">Reload images</button>
         <button id="exportButton" class="export-button" type="button" disabled>Export JSON</button>
         <input id="mdInput" type="file" accept=".txt,.md,text/plain,text/markdown" />
         <input id="jsonInput" type="file" accept=".json,.zip,application/json,application/zip,application/x-zip-compressed" hidden />
@@ -282,7 +283,7 @@
       </dialog>
       <div id="notice" class="notice" role="status" hidden></div>
     </div>
-    <script src="image-viewer.js?v=1"></script>
+    <script src="image-viewer.js?v=2"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=4"></script>
     <script src="app.js?v=26"></script>
