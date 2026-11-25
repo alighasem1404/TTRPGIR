@@ -51,6 +51,12 @@ New package upgrades should be registered in `BOOK_REPROCESS_RULES` in `book-rep
 
 Only data still present in the package can be reprocessed. Content discarded by an older Markdown import cannot be reconstructed without the original source.
 
+## Restoring missing source images
+
+**Restore from Markdown** compares an attached source with the open package using the current import rules, including image-only page artwork. The source is a reference only; the existing package remains the authoritative edited book. Matching considers image occurrences, original URLs, entry IDs/titles, and nearby content. Possible replacements, reused images, and uncertain positions are flagged for review instead of selected automatically.
+
+Applying the selection inserts only new image blocks at the chosen boundaries. Existing block objects, entry metadata/order, theme, source metadata, and assets remain intact. An existing matching asset is reused when possible; otherwise a unique asset ID is allocated. The reference Markdown is not embedded in the exported package, and no schema change is required. This recovers image references, not unavailable image bytes; bundled and recovered images already in the book are preserved.
+
 ## Versioning rules
 
 - Increase `schemaVersion` when the package shape changes. The current package format is version 1.

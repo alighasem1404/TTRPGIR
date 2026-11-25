@@ -48,12 +48,12 @@ button { cursor: pointer; }
 .heading-actions, .heading-dialog-actions, .heading-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .heading-actions { margin-top: 10px; }
 .heading-actions button, #headingEditor button, #headingEditor input:not([type="checkbox"]), #headingEditor select,
-#pdfInspector button, #pdfInspector input, #imageRecovery button, #imageRecovery input, #imageRecovery select, #bookZipExport button, #bookReprocess button {
+#pdfInspector button, #pdfInspector input, #imageRecovery button, #imageRecovery input, #imageRecovery select, #bookZipExport button, #bookReprocess button, #bookRestore button, #bookRestore select, #bookRestore input[type="file"] {
   min-height: 36px; padding: 6px 9px; border: 1px solid var(--gold-dark); border-radius: 4px;
   color: var(--ink); background: var(--parchment-light); font: inherit;
 }
 .heading-actions button { font-size: 12px; }
-.heading-actions button:disabled, #headingEditor button:disabled, #pdfInspector button:disabled, #imageRecovery button:disabled, #bookZipExport button:disabled, #bookReprocess button:disabled { opacity: .55; cursor: default; }
+.heading-actions button:disabled, #headingEditor button:disabled, #pdfInspector button:disabled, #imageRecovery button:disabled, #bookZipExport button:disabled, #bookReprocess button:disabled, #bookRestore button:disabled { opacity: .55; cursor: default; }
 #headingEditor {
   width: min(1200px, calc(100% - 24px)); max-height: calc(100% - 24px);
   padding: clamp(12px, 4vw, 24px); border: 1px solid var(--gold-dark); border-radius: 8px;
@@ -84,11 +84,11 @@ button { cursor: pointer; }
 #headingEditor #previewHeadings, #headingEditor #applyHeadings { color: #fff3db; background: var(--wine-dark); }
 .maker-panel .pdf-status { margin-top: 8px; overflow-wrap: anywhere; }
 .pdf-status:empty { display: none; }
-#pdfInspector, #imageRecovery, #bookZipExport, #bookReprocess {
+#pdfInspector, #imageRecovery, #bookZipExport, #bookReprocess, #bookRestore {
   width: min(950px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: clamp(12px, 4vw, 24px);
   border: 1px solid var(--gold-dark); border-radius: 8px; color: var(--ink); background: var(--parchment); font-size: 14px;
 }
-#pdfInspector::backdrop, #imageRecovery::backdrop, #bookZipExport::backdrop, #bookReprocess::backdrop { background: rgba(26, 14, 19, .75); }
+#pdfInspector::backdrop, #imageRecovery::backdrop, #bookZipExport::backdrop, #bookReprocess::backdrop, #bookRestore::backdrop { background: rgba(26, 14, 19, .75); }
 .pdf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 .pdf-toolbar h2 { flex: 1; margin: 0; color: var(--wine-dark); font: 24px Georgia, serif; }
 #pdfPageNumber { width: 70px; }
@@ -141,6 +141,32 @@ button { cursor: pointer; }
 #applyRecovery { color: #fff3db; background: var(--wine-dark); }
 #bookZipExport { width: min(450px, calc(100% - 24px)); }
 #bookReprocess { width: min(520px, calc(100% - 24px)); overflow: auto; }
+#bookRestore { width: min(890px, calc(100% - 24px)); overflow: auto; }
+#bookRestore [hidden] { display: none; }
+.restore-source { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.restore-source label { display: grid; gap: 5px; min-width: 0; flex: 1; }
+.restore-source input { width: 100%; max-width: 100%; }
+.restore-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+#restoreSummary { font-weight: 700; color: var(--wine-dark); }
+#restoreSourceWarning:not(:empty) { padding: 8px; background: var(--card); border-inline-start: 3px solid var(--gold-dark); }
+.restore-rows { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 10px; }
+.restore-row { display: grid; grid-template-columns: minmax(110px, 23%) minmax(0, 1fr); gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--parchment-light); }
+.restore-art-preview { display: grid; place-items: center; overflow: hidden; aspect-ratio: 4 / 5; min-height: 100px; max-height: 210px; align-self: start; padding: 4px; border: 1px solid var(--border); background: var(--card); color: var(--ink-soft); text-align: center; font-size: 11px; }
+.restore-art-preview > * { grid-area: 1 / 1; }
+.restore-art-preview img { z-index: 1; width: 100%; height: 100%; object-fit: contain; background: var(--card); }
+.restore-art-details { min-width: 0; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.restore-art-details p { margin: 0; }
+.restore-choice { display: flex; gap: 8px; align-items: baseline; font-size: 15px; }
+.restore-image-name { color: var(--ink-soft); font-size: 12px; }
+.restore-art-details > label:not(.restore-choice) { display: grid; gap: 3px; font-size: 12px; }
+.restore-art-details select { width: 100%; min-width: 0; }
+.restore-match-note { font-size: 12px; color: var(--wine-dark); }
+.restore-needs-review { font-weight: 700; padding: 5px 7px; border-inline-start: 3px solid var(--gold-dark); background: var(--card); }
+#applyRestore:not(:disabled) { color: #fff3db; background: var(--wine-dark); }
+@media (max-width: 550px) {
+  .restore-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .restore-art-preview { aspect-ratio: 16 / 9; max-height: 175px; }
+}
 #reprocessSummary { color: var(--wine-dark); font-weight: 700; }
 .reprocess-results { margin: 12px 0; padding: 0; list-style: none; }
 .reprocess-results li { margin-block: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--parchment-light); }

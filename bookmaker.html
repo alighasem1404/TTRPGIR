@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=26" />
+    <link rel="stylesheet" href="styles.css?v=27" />
   </head>
   <body>
     <div class="app-shell maker-page">
@@ -50,6 +50,7 @@
             </div>
             <div class="heading-actions">
               <button id="reprocessBook" type="button" disabled>Reprocess book</button>
+              <button id="restoreFromMarkdown" type="button" disabled>Restore from Markdown</button>
               <button id="openHeadings" type="button" disabled>Edit headings</button>
               <button id="undoHeadings" type="button" disabled>Undo heading edit</button>
             </div>
@@ -130,6 +131,32 @@
           <div class="support-card muted-card"><span class="support-icon">→</span><div><strong>Next step</strong><p>Open the exported package in index.html to test the independent reader.</p></div></div>
         </aside>
       </main>
+      <dialog id="bookRestore" aria-labelledby="restoreTitle">
+        <div class="heading-dialog-header">
+          <h2 id="restoreTitle">Restore from Markdown</h2>
+          <form method="dialog"><button type="submit">Close</button></form>
+        </div>
+        <p>Compare the original Markdown with your open book. Select missing images to add; existing content and image replacements will not be changed.</p>
+        <div class="restore-source">
+          <label>Original Markdown <input id="restoreMarkdownInput" type="file" accept=".md,.markdown,.txt,text/plain,text/markdown"></label>
+          <button id="restoreUseSource" type="button" hidden>Use current Markdown</button>
+        </div>
+        <p id="restoreStatus" class="heading-hint" role="status"></p>
+        <section id="restoreReview" hidden>
+          <p id="restoreSummary"></p>
+          <p id="restoreSourceWarning" class="heading-hint"></p>
+          <div class="restore-toolbar">
+            <button id="restoreSelectSuggested" type="button">Select suggested</button>
+            <button id="restoreClearSelection" type="button">Clear selection</button>
+            <span id="restoreSelection" aria-live="polite">0 selected</span>
+          </div>
+          <p class="heading-hint">Some images may have been removed intentionally or replaced with bundled artwork. Review each selection, especially items marked for review.</p>
+          <ul id="restoreRows" class="restore-rows"></ul>
+          <div class="heading-dialog-actions">
+            <button id="applyRestore" type="button" disabled>Restore selected images</button>
+          </div>
+        </section>
+      </dialog>
       <dialog id="bookReprocess" aria-labelledby="reprocessTitle">
         <div class="heading-dialog-header">
           <h2 id="reprocessTitle">Reprocess book</h2>
@@ -301,7 +328,8 @@
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=4"></script>
     <script src="book-contents.js?v=1"></script>
-    <script src="app.js?v=29"></script>
+    <script src="app.js?v=30"></script>
+    <script src="book-restore.js?v=1"></script>
     <script src="book-reprocessing.js?v=1"></script>
     <script src="book-editing.js?v=12"></script>
     <script src="pdf-import.js?v=7" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>

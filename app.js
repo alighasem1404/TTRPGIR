@@ -46,6 +46,13 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#bookZipExport").addEventListener("close", (event) => {
     if (!event.target.open) zipExport = null;
   });
+  $("#restoreFromMarkdown").addEventListener("click", openBookRestore);
+  $("#restoreMarkdownInput").addEventListener("change", loadRestoreMarkdown);
+  $("#restoreUseSource").addEventListener("click", useLoadedRestoreSource);
+  $("#restoreSelectSuggested").addEventListener("click", selectSuggestedRestores);
+  $("#restoreClearSelection").addEventListener("click", clearRestoreSelection);
+  $("#applyRestore").addEventListener("click", applyBookRestore);
+  $("#bookRestore").addEventListener("close", (event) => { if (!event.target.open) resetBookRestore(); });
   $("#reprocessBook").addEventListener("click", openBookReprocess);
   $("#applyReprocess").addEventListener("click", applyBookReprocess);
   $("#bookReprocess").addEventListener("close", (event) => { if (!event.target.open) reprocessDraft = null; });
@@ -158,6 +165,8 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
   const previousImages = state.bundledImages;
   if ($("#headingEditor").open) $("#headingEditor").close();
   if ($("#bookReprocess").open) $("#bookReprocess").close();
+  if ($("#bookRestore").open) $("#bookRestore").close();
+  resetBookRestore();
   reprocessDraft = null;
   state.normalizedBreakFieldsOnLoad = normalizedBreakFields;
   if ($("#bookZipExport").open) $("#bookZipExport").close();
@@ -189,6 +198,7 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
   setStatus(`Loaded ${fileName}`);
   $("#exportButton").disabled = false;
   $("#reprocessBook").disabled = false;
+  $("#restoreFromMarkdown").disabled = false;
   updateExportLabel();
   for (const image of previousImages.values()) URL.revokeObjectURL(image.url);
 }
@@ -422,14 +432,14 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
   return entries;
 }
 
-function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacementHistory = false, currentEntryId = state.entries[state.currentPage]?.id } = {}) {
+function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacementHistory = false, currentEntryId = state.entries[state.currentPage]?.id, preserveExistingData = false } = {}) {
   if (!keepReplacementHistory) window.bookEditing?.clearReplacementHistory();
   const currentId = currentEntryId;
   if (!state.visualEdits || !keepHeadingHistory) state.headingHistory.length = 0;
   state.visualEdits = true;
-  state.entries = entries.map((entry, order) => ({ ...entry, order }));
+  state.entries = preserveExistingData ? entries : entries.map((entry, order) => ({ ...entry, order }));
   state.bookPackage.entries = state.entries;
-  normalizeBookText(state.bookPackage);
+  if (!preserveExistingData) normalizeBookText(state.bookPackage);
   const index = state.entries.findIndex(({ id }) => id === currentId);
   state.currentPage = index < 0 ? Math.max(0, Math.min(state.currentPage, state.entries.length - 1)) : index;
   refreshEditedImageSlots();
@@ -682,9 +692,9 @@ function parseMarkdownImage(line) {
   return url ? { alt: match[1], url, ...(fullPage && { fullPage: true }) } : null;
 }
 
-function refreshImageSlots() {
+function markdownImageContexts(markdown, config) {
   const contexts = new Map();
-  const body = state.source.slice(markdownHeader(state.source).end);
+  const body = markdown.slice(markdownHeader(markdown).end);
   const source = prepareSourcePages(body, "\n\\page\n");
   const lines = source.split("\n");
   const headings = new Map(findMarkdownHeadings(source).map((item) => [item.index, item]));
@@ -717,7 +727,7 @@ function refreshImageSlots() {
     }
     if (title?.level === 3) previousH3 = { index, title: heading };
     const image = parseMarkdownImage(line);
-    if (!image || shouldIgnoreImage(image.alt, image.url, state.config, image.fullPage)) return;
+    if (!image || shouldIgnoreImage(image.alt, image.url, config, image.fullPage)) return;
     const next = followingH3[index];
     const nearestH3 = next && (!previousH3 || next.index - index < index - previousH3.index) ? next : previousH3;
     const pair = JSON.stringify([image.alt, image.url]);
@@ -731,6 +741,11 @@ function refreshImageSlots() {
     });
   });
 
+  return contexts;
+}
+
+function refreshImageSlots() {
+  const contexts = markdownImageContexts(state.source, state.config);
   state.imageSlots = [];
   state.previewImages = new WeakMap();
   const occurrences = new Map();

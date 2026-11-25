@@ -52,6 +52,7 @@ async function smoke(width) {
     await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Maker demo");
     await smokeImageOnlyPages(maker, browser, width);
     await smokePartsAndBreaks(browser, width);
+    await smokeRestoreFromMarkdown(browser, width);
     const pdfBase = new URL(await maker.evaluate(() => {
       const script = document.querySelector("script[data-pdf-engine]");
       return new URL(script.dataset.pdfEngine, script.src).href;
@@ -1180,6 +1181,205 @@ async function smokePartsAndBreaks(browser, width) {
   await reader.until(() => readerState.entries[0]?.title === "Alpha" && readerState.entries.length === 3, "Reader opens reprocessed ZIP");
   const finalRows = await reader.evaluate(() => [...document.getElementById("contents").children].map((row) => row.querySelector(".page-title")?.textContent));
   assert.deepEqual(finalRows, expected);
+}
+
+async function smokeRestoreFromMarkdown(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Restore fixture maker");
+  const alreadyCurrent = await maker.evaluate(() => {
+    const before = JSON.stringify(state.bookPackage);
+    document.getElementById("restoreFromMarkdown").click();
+    document.getElementById("restoreUseSource").click();
+    const result = { rows: restoreDraft.rows.length, unchanged: before === JSON.stringify(state.bookPackage), disabled: document.getElementById("applyRestore").disabled };
+    document.getElementById("bookRestore").close();
+    return result;
+  });
+  assert.deepEqual(alreadyCurrent, { rows: 0, unchanged: true, disabled: true });
+  const fixture = await maker.evaluate(async () => {
+    // First verify the real old-demo situation: exactly the four omitted pages.
+    const original = JSON.parse(JSON.stringify(state.bookPackage));
+    original.entries.forEach((entry) => { entry.blocks = entry.blocks.filter((block) => block.role !== "full-page"); });
+    const demo = scanRestoreImages(original, state.source, "Euphoria Demo.txt", { rules: { entryHeadingLevel: 2 } });
+    const demoMatches = demo.candidates.map((candidate) => [candidate.context.page, original.entries[candidate.suggestion.entryIndex]?.title]);
+    const art = (color) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 8;
+      const context = canvas.getContext("2d");
+      context.fillStyle = color;
+      context.fillRect(0, 0, 8, 8);
+      return canvas.toDataURL("image/png");
+    };
+    const existing = art("#aa8822"), menu = art("#553399"), repeat = art("#225577"), replaced = art("#998855"), changed = art("#11aa33"), unmatched = art("#ee8844");
+    const source = [
+      "```metadata", "title: Restore fixture", "```", "",
+      "## Chapter A", "Original opening words.", "![Existing](" + existing + ")", "Before the menu.",
+      "\\page", "![menu](" + menu + "){width:100%,height:100%}", "\\page",
+      "After the menu.", "![Repeated](" + repeat + ")", "End A.",
+      "## Chapter B", "Beginning B.", "![Original replacement](" + replaced + ")", "After the replacement.",
+      "![Repeated](" + repeat + ")", "End B.",
+      "## Missing chapter", "Unique missing introduction.", "![Unmatched](" + unmatched + ")", "Unique missing ending."
+    ].join("\n");
+    const config = standardConversionConfig();
+    const book = JSON.parse(JSON.stringify(buildBookPackage(source, "restore-fixture.md", parseDocument(source, config), config)));
+    const a = book.entries[0], b = book.entries[1];
+    a.title = "Renamed A";
+    a.blocks[0].text = a.title;
+    a.blocks[1].text = "My edited opening words.";
+    a.blocks = a.blocks.filter((block) => block.role !== "full-page");
+    b.title = "Renamed B";
+    b.blocks[0].text = b.title;
+    const replacement = book.assets.find((asset) => asset.src === replaced);
+    const replacementBlock = b.blocks.find((block) => block.assetId === replacement.id);
+    replacement.id += "-recovered";
+    replacement.src = changed;
+    replacement.alt = "My edited replacement alt";
+    replacementBlock.assetId = replacement.id;
+    replacementBlock.caption = "My edited replacement caption";
+    replacementBlock.width = "70%";
+    b.blocks = b.blocks.filter((block) => block.assetId !== book.assets.find((asset) => asset.src === repeat).id);
+    // Keep custom ordering metadata as well as the edited order and content.
+    a.order = 7;
+    b.order = 12;
+    book.entries = [b, a];
+    book.assets = book.assets.filter((asset) => book.entries.some((entry) => entry.blocks.some((block) => block.assetId === asset.id)));
+    book.theme.tokens["color.primary"] = "#27443a";
+    const zipBook = JSON.parse(JSON.stringify(book));
+    const bundled = zipBook.assets.find((asset) => asset.id === replacement.id);
+    const png = await (await fetch(changed)).arrayBuffer();
+    bundled.src = "images/edited-replacement.png";
+    const zip = new JSZip();
+    zip.file("book.json", JSON.stringify(zipBook));
+    zip.file(bundled.src, png);
+    return { source, book, zip: [...await zip.generateAsync({ type: "uint8array" })], png: [...new Uint8Array(png)], menu, repeat, demoMatches };
+  });
+  assert.deepEqual(fixture.demoMatches, [[1, "Welcome"], [7, "The Fang"], [19, "The Crimson Beat"], [29, "The Apothecary's Draft"]]);
+  await maker.upload("jsonInput", "edited-fixture.json", JSON.stringify(fixture.book));
+  await maker.until(() => state.entries[0]?.title === "Renamed B", "Edited JSON available for restore");
+  const before = await maker.evaluate(() => JSON.stringify(state.bookPackage));
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "restore-fixture.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "Restore review populated");
+  const preview = await maker.evaluate(() => {
+    const list = restoreDraft.rows.map((row) => ({
+      label: row.candidate.image.alt,
+      entry: row.entrySelect.value === "" ? null : state.entries[Number(row.entrySelect.value)].title,
+      possible: Boolean(row.candidate.possible),
+      confident: row.candidate.suggestion.confidence,
+      selected: row.checkbox.checked
+    }));
+    const initiallyDisabled = document.getElementById("applyRestore").disabled;
+    document.getElementById("restoreSelectSuggested").click();
+    const suggested = restoreDraft.rows.filter((row) => row.checkbox.checked).map((row) => row.candidate.image.alt);
+    document.getElementById("bookRestore").close();
+    return { list, suggested, initiallyDisabled, book: JSON.stringify(state.bookPackage) };
+  });
+  assert.equal(preview.book, before, "Scanning and canceling do not change the book");
+  assert.ok(preview.initiallyDisabled);
+  assert.deepEqual(preview.suggested, ["menu", "Repeated"]);
+  assert.deepEqual(preview.list.find((row) => row.label === "menu"), { label: "menu", entry: "Renamed A", possible: false, confident: true, selected: false });
+  assert.equal(preview.list.find((row) => row.label === "Original replacement").possible, true);
+  assert.equal(preview.list.find((row) => row.label === "Unmatched").entry, null);
+
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "restore-fixture.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "Restore ready to apply");
+  const applied = await maker.evaluate(() => {
+    const old = state.bookPackage;
+    const oldBlocks = old.entries.map((entry) => [...entry.blocks]);
+    document.getElementById("restoreSelectSuggested").click();
+    document.getElementById("applyRestore").click();
+    return {
+      unchangedBlocks: state.entries.every((entry, index) => JSON.stringify(entry.blocks.filter((block) => oldBlocks[index].includes(block))) === JSON.stringify(oldBlocks[index])),
+      metadata: old.book === state.bookPackage.book && old.theme === state.bookPackage.theme && old.source === state.bookPackage.source && old.conversion === state.bookPackage.conversion,
+      orders: state.entries.map((entry) => entry.order),
+      names: state.entries.map((entry) => entry.title),
+      oldAssets: old.assets.every((asset) => state.bookPackage.assets.includes(asset)),
+      addedAssets: state.bookPackage.assets.length - old.assets.length,
+      menuPosition: state.entries[1].blocks.map((block) => block.text || block.role),
+      closed: !document.getElementById("bookRestore").open
+    };
+  });
+  assert.ok(applied.unchangedBlocks && applied.metadata && applied.oldAssets && applied.closed);
+  assert.deepEqual(applied.orders, [12, 7]);
+  assert.deepEqual(applied.names, ["Renamed B", "Renamed A"]);
+  assert.equal(applied.addedAssets, 1, "Repeat occurrence reuses existing asset");
+  assert.ok(applied.menuPosition.indexOf("full-page") > applied.menuPosition.indexOf("Before the menu."));
+  assert.equal(applied.menuPosition[applied.menuPosition.indexOf("full-page") + 1], "After the menu.");
+  const page = await maker.evaluate(() => {
+    const art = state.imageSlots.find((slot) => slot.fullPage);
+    goToPage(art.entryIndex);
+    return art.page;
+  });
+  assert.equal(page, 2);
+  await maker.until(() => document.querySelector(".page-art--full-page img")?.naturalWidth === 8, "Restored artwork renders");
+
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "restore-fixture.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "Rescan after restore");
+  const remaining = await maker.evaluate(() => {
+    const labels = restoreDraft.rows.map((row) => row.candidate.image.alt);
+    const unmatched = restoreDraft.rows.find((row) => row.candidate.image.alt === "Unmatched");
+    unmatched.checkbox.click();
+    const requiresPlacement = document.getElementById("applyRestore").disabled;
+    unmatched.entrySelect.value = "0";
+    unmatched.entrySelect.dispatchEvent(new Event("change"));
+    unmatched.positionSelect.value = "0";
+    unmatched.positionSelect.dispatchEvent(new Event("change"));
+    document.getElementById("applyRestore").click();
+    const firstImage = state.entries[0].blocks[0];
+    return { labels, requiresPlacement, manualPlacement: state.bookPackage.assets.find((asset) => asset.id === firstImage.assetId)?.alt };
+  });
+  assert.deepEqual(remaining.labels, ["Original replacement", "Unmatched"]);
+  assert.ok(remaining.requiresPlacement);
+  assert.equal(remaining.manualPlacement, "Unmatched");
+
+  // Opening a ZIP and applying restorations must retain its bundled image and
+  // in-session image replacement and export both after the additions.
+  await maker.upload("jsonInput", "edited-fixture.zip", fixture.zip);
+  await maker.until(() => state.entries[0]?.title === "Renamed B" && state.bundledImages.size === 1, "Older ZIP ready to restore");
+  const oldImageState = await maker.evaluate(async () => {
+    const slot = state.imageSlots.find((image) => image.alt === "Existing");
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 8;
+    updateImageRecovery(slot, { blob: await window.bookArchive.encodeWebp(canvas), fileName: "existing-recovery.webp", caption: "Existing restored caption" });
+    return { key: slot.key, bundleUrl: state.bundledImages.get("images/edited-replacement.png").url };
+  });
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "restore-fixture.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "ZIP restore review populated");
+  const zipState = await maker.evaluate((oldImageState) => {
+    const prior = state.recoveredImages.get(oldImageState.key);
+    document.getElementById("restoreSelectSuggested").click();
+    document.getElementById("applyRestore").click();
+    const block = state.entries.flatMap((entry) => entry.blocks).find((block) => block[imageSlotContext]?.key === oldImageState.key);
+    return {
+      bundledUnchanged: state.bundledImages.get("images/edited-replacement.png").url === oldImageState.bundleUrl,
+      recoveredUnchanged: state.previewImages.get(block) === prior,
+      menuCount: state.entries.flatMap((entry) => entry.blocks).filter((block) => block.role === "full-page").length,
+      label: document.getElementById("exportButton").textContent
+    };
+  }, oldImageState);
+  assert.ok(zipState.bundledUnchanged && zipState.recoveredUnchanged);
+  assert.equal(zipState.menuCount, 1);
+  assert.equal(zipState.label, "Export Book ZIP");
+  await maker.evaluate(() => document.getElementById("exportButton").click());
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Restored ZIP ready to export");
+  const exported = await maker.evaluate(async () => {
+    const { bookPackage, images } = await window.bookArchive.open(zipExport.blob, validateBookPackage, new AbortController().signal);
+    const original = [...new Uint8Array(await images.get("images/edited-replacement.png").arrayBuffer())];
+    const bytes = [...new Uint8Array(await zipExport.blob.arrayBuffer())];
+    document.getElementById("bookZipExport").close();
+    return { original, files: [...images.keys()], titles: bookPackage.entries.map((entry) => entry.title), bytes };
+  });
+  assert.deepEqual(exported.original, fixture.png);
+  assert.ok(exported.files.includes("images/existing-recovery.webp"));
+  assert.deepEqual(exported.titles, ["Renamed B", "Renamed A"]);
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader restore fixture ready");
+  await reader.upload("jsonInput", "restored-fixture.zip", exported.bytes);
+  await reader.until(() => readerState.entries[0]?.title === "Renamed B", "Reader opens restored ZIP");
+  await reader.evaluate(() => goToEntry(1));
+  await reader.until(() => document.querySelector(".page-art--full-page img")?.naturalWidth === 8, "Reader displays restored image");
 }
 
 async function smokeHeadingGroupOrdering(browser, width) {
