@@ -1,5 +1,7 @@
 const SOURCE_PATH = encodeURI("Test text/Euphoria Demo.txt");
 const CONFIG_PATH = "books/euphoria-demo/conversion.json";
+// Internal annotation, added only while converting the source.
+const IMAGE_ONLY_PAGE_MARKER = " <!--TTRPGIR_IMAGE_ONLY_PAGE-->";
 
 const state = {
   source: "",
@@ -471,11 +473,26 @@ function parseDocument(source, config = {}) {
   const { metadata, css, end } = markdownHeader(source);
   const body = source.slice(end).trim();
   const pageBreaks = (body.match(/\\page\b/g) || []).length;
-  const entries = buildEntries(body, config);
-  const allBody = body.replace(/\\page\b/g, "\n");
+  const allBody = prepareSourcePages(body);
+  const entries = buildEntries(allBody, config);
   const keptImages = allBody.split(/\r?\n/).map(parseMarkdownImage)
-    .filter((image) => image && !shouldIgnoreImage(image.alt, image.url, config)).length;
+    .filter((image) => image && !shouldIgnoreImage(image.alt, image.url, config, image.fullPage)).length;
   return { metadata, css, entries, pageBreaks, images: keptImages, tables: (allBody.match(/\{\{fancyTable\b/gi) || []).length, directives: (allBody.match(/\{\{[^\n}]*/g) || []).length };
+}
+
+// Determine image-only pages before removing the printed-page boundaries. Mark
+// individual occurrences rather than URLs: the same artwork can be decoration on
+// a different page, and those normal image filtering rules should still apply.
+function prepareSourcePages(body, separator = "\n") {
+  return body.split(/\\page\b/g).map((page) => {
+    const visible = cleanSource(page).split(/\r?\n/).map((line) => line.trim()).filter((line) =>
+      line && !/^<!--.*-->$/.test(line) && !/^(?:<br[ \t]*\/?[ \t]*>\s*)+$/i.test(line));
+    if (!visible.length || !visible.every((line) => parseMarkdownImage(line))) return page;
+    return page.split(/\r?\n/).map((line) => {
+      const image = parseMarkdownImage(line) || parseMarkdownImage(cleanSource(line));
+      return image ? line + IMAGE_ONLY_PAGE_MARKER : line;
+    }).join("\n");
+  }).join(separator);
 }
 
 function findMarkdownHeadings(source, start = 0) {
@@ -600,9 +617,9 @@ function markdownToBlocks(source, config, assets) {
     if (image) {
       const { alt, url } = image;
       const rule = findImageRule(alt, url, config);
-      if (!shouldIgnoreImage(alt, url, config) && rule?.action !== "ignore") {
+      if (!shouldIgnoreImage(alt, url, config, image.fullPage)) {
         const assetId = getAssetId(alt, url, assets);
-        blocks.push({ type: "image", assetId, role: imageRole(alt), placement: rule?.location || "inline", className: rule?.className, width: rule?.width, [markdownImage]: image });
+        blocks.push({ type: "image", assetId, role: image.fullPage ? "full-page" : imageRole(alt), placement: rule?.location || "inline", className: rule?.className, width: rule?.width, [markdownImage]: image });
       }
       index += 1;
       continue;
@@ -658,15 +675,17 @@ function getAssetId(alt, url, assets) {
 }
 
 function parseMarkdownImage(line) {
-  const match = line.trim().match(/^!\[([^\]]*)\]\(\s*(<[^>]+>|(?:[^()]|\([^()]*\))+?)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)(?:\s*\{[^}]*\})*$/);
+  const text = line.trim();
+  const fullPage = text.endsWith(IMAGE_ONLY_PAGE_MARKER);
+  const match = (fullPage ? text.slice(0, -IMAGE_ONLY_PAGE_MARKER.length).trimEnd() : text).match(/^!\[([^\]]*)\]\(\s*(<[^>]+>|(?:[^()]|\([^()]*\))+?)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)(?:\s*\{[^}]*\})*$/);
   const url = match?.[2].trim().replace(/^<|>$/g, "");
-  return url ? { alt: match[1], url } : null;
+  return url ? { alt: match[1], url, ...(fullPage && { fullPage: true }) } : null;
 }
 
 function refreshImageSlots() {
   const contexts = new Map();
   const body = state.source.slice(markdownHeader(state.source).end);
-  const source = body.replace(/\\page\b/g, "\n\\page\n");
+  const source = prepareSourcePages(body, "\n\\page\n");
   const lines = source.split("\n");
   const headings = new Map(findMarkdownHeadings(source).map((item) => [item.index, item]));
   let offset = 0;
@@ -698,7 +717,7 @@ function refreshImageSlots() {
     }
     if (title?.level === 3) previousH3 = { index, title: heading };
     const image = parseMarkdownImage(line);
-    if (!image) return;
+    if (!image || shouldIgnoreImage(image.alt, image.url, state.config, image.fullPage)) return;
     const next = followingH3[index];
     const nearestH3 = next && (!previousH3 || next.index - index < index - previousH3.index) ? next : previousH3;
     const pair = JSON.stringify([image.alt, image.url]);
@@ -776,8 +795,9 @@ function collectSourceArtifacts(source, blocks, config) {
       } else anchor = undefined;
     }
     const image = parseMarkdownImage(line);
-    if (image && shouldIgnoreImage(image.alt, image.url, config)) items.push({ label: image.alt || image.url, image, heading, anchor });
-    const directive = line.match(/^\{\{([\w-]+)\b(.*?)(?:\}\})?$/);
+    if (image && shouldIgnoreImage(image.alt, image.url, config, image.fullPage)) items.push({ label: image.alt || image.url, image, heading, anchor });
+    const directiveLine = line.endsWith(IMAGE_ONLY_PAGE_MARKER) ? line.slice(0, -IMAGE_ONLY_PAGE_MARKER.length).trimEnd() : line;
+    const directive = directiveLine.match(/^\{\{([\w-]+)\b(.*?)(?:\}\})?$/);
     if (directive) items.push({ label: directive[1], text: directive[2].trim().replace(/^,\s*/, ""), heading, anchor });
   }
   return items;
@@ -898,10 +918,13 @@ function unwrapHomebreweryText(value) {
   return text;
 }
 
-function shouldIgnoreImage(alt, url, config = {}) {
+function shouldIgnoreImage(alt, url, config = {}, fullPage = false) {
   const label = alt.trim().toLowerCase();
   const source = url.toLowerCase();
   const configuredIgnore = findImageRule(alt, url, config)?.action === "ignore";
+  // A layout label must not erase the only content on a printed page.
+  // An explicit per-image ignore override still takes precedence.
+  if (fullPage) return configuredIgnore;
   const ignoredAlt = config.rules?.images?.ignoredAlt || [];
   const ignoredPatterns = config.rules?.images?.ignoredSourcePatterns || [];
   return configuredIgnore || ignoredAlt.some((value) => value.toLowerCase() === label) || ignoredPatterns.some((value) => source.includes(value.toLowerCase())) || ["background", "menu", "namebanner"].includes(label) || /(?:background|transparent)\.(?:webp|png|jpe?g)(?:\?|$)/i.test(source);
@@ -928,7 +951,7 @@ function renderPackageBlock(block, assets, entryIndex, blockIndex) {
       ...original, src: state.bundledImages.get(original.src)?.url || original.src
     };
     if (!asset) return "";
-    const semanticClass = block.role === "emblem" ? " entry-emblem" : "";
+    const semanticClass = block.role === "emblem" ? " entry-emblem" : block.role === "full-page" ? " page-art--full-page" : "";
     const placementClass = block.placement === "entry-top-right" ? " entry-emblem--top-right" : "";
     const customClass = block.className ? ` ${block.className.replace(/[^a-z0-9_-]/gi, "")}` : "";
     const className = `${semanticClass}${placementClass}${customClass}`;

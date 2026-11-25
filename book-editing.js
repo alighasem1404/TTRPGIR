@@ -1259,8 +1259,9 @@
             continue;
           }
           const source = artifact.image;
-          const converted = source ? { type: "image", role: imageRole(source.alt), placement: "inline", [markdownImage]: source,
-            assetId: ensureAsset(source.url, source.alt, imageRole(source.alt)) }
+          const role = source?.fullPage ? "full-page" : source && imageRole(source.alt);
+          const converted = source ? { type: "image", role, placement: "inline", [markdownImage]: source,
+            assetId: ensureAsset(source.url, source.alt, role) }
             : choice === "divider" ? { type: "divider", style: "rule" }
               : { type: "paragraph", style: "book-callout", text: artifact.text || artifact.label };
           converted[sourceArtifact] = artifact;

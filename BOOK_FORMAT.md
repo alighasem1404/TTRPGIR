@@ -37,7 +37,7 @@ These rules apply to every book unless a future format version changes them:
 3. `\page` does not create a web entry. It may be preserved as source metadata.
 4. Images are inline by default and appear in source order.
 5. Homebrewery absolute positioning is ignored.
-6. Backgrounds, page overlays, menus, and decorative banners are ignored by role or source policy.
+6. Backgrounds, page overlays, menus, and decorative banners are ignored on text pages by role or source policy. Artwork on image-only source pages is preserved as an image block with role `full-page` and displayed without the usual illustration height limit, unless an explicit image ignore override applies.
 7. Book-specific layout decisions belong in a builder-side conversion profile or explicit block metadata, not in the global reader.
 8. A semantic image placement such as `entry-top-right` may be defined by a builder profile when a book needs an emblem or similar feature art beside an entry heading.
 

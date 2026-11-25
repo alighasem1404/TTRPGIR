@@ -252,6 +252,8 @@ button { cursor: pointer; }
 .page-inner { position: relative; z-index: 3; }
 .page-art { position: relative; z-index: 1; display: block; max-width: 100%; margin: 20px auto; pointer-events: auto; }
 .page-art--flow { width: min(100%, 440px); }
+.page-art--flow.page-art--full-page { width: 100%; }
+.page-content .page-art--full-page img { max-height: none; width: auto; height: auto; }
 .page-art--flow.entry-emblem { margin-top: 2px; margin-bottom: 18px; }
 .page-content { display: flow-root; }
 .page-viewport[dir="rtl"] .book-page,

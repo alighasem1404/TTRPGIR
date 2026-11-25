@@ -20,9 +20,9 @@ The Markdown remains the source of truth. The web reader presents the content se
 
 - Images are inserted at the position where they occur in the Markdown.
 - Homebrewery positioning attributes such as `position:absolute`, `top`, `left`, `right`, `width`, and `height` are ignored for the web reader. They were intended for printed-page composition.
-- Ignore images whose alt text is `background`, `menu`, or `nameBanner`.
+- On text pages, ignore layout images whose alt text is `background`, `menu`, or `nameBanner`.
 - Ignore image sources whose filenames identify a background or transparent page overlay.
-- Keep useful content art such as characters, locations, artifacts, emblems, and illustrations.
+- Keep useful content art such as characters, locations, artifacts, emblems, and illustrations. If a printed source page contains only images after layout wrappers are removed, preserve its images even when their labels would normally be ignored. An explicit book-specific ignore override still applies. The art stays in source order as responsive full-page artwork, without making `\page` a separate web entry.
 - Kept images should render as responsive inline figures with their alt text available as a caption.
 
 ## Book-specific configuration

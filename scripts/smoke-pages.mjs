@@ -50,6 +50,7 @@ async function smoke(width) {
   try {
     const maker = await browser.page("bookmaker.html", width);
     await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Maker demo");
+    await smokeImageOnlyPages(maker, browser, width);
     await smokePartsAndBreaks(browser, width);
     const pdfBase = new URL(await maker.evaluate(() => {
       const script = document.querySelector("script[data-pdf-engine]");
@@ -315,7 +316,8 @@ async function smokeReopenBook(browser, width, originalZip, legacyZip) {
   assert.deepEqual(released, [true, true], "Replacing a book releases its bundled image URLs");
   await maker.evaluate(() => {
     document.getElementById("toggleBookEditing").click();
-    document.querySelector("#pageViewport [data-book-edit]").click();
+    const headingIndex = state.entries[state.currentPage].blocks.findIndex((block) => block.type === "heading");
+    document.querySelector(`#pageViewport [data-book-edit="${headingIndex}"]`).click();
     const form = document.getElementById("bookEditingForm");
     form.elements.text.value = "A reopened JSON heading";
     form.requestSubmit(form.querySelector('button[value="save"]'));
@@ -908,6 +910,63 @@ async function smokeOrganizationAndCaptions(browser, width) {
   await reader.upload("jsonInput", "empty-book.json", emptyBook);
   await reader.until(() => document.getElementById("currentPage").textContent === "0" &&
     !document.getElementById("pageViewport").textContent, "Reader clears the previous book after every entry was removed");
+}
+
+async function smokeImageOnlyPages(maker, browser, width) {
+  const demo = await maker.evaluate(() => ({
+    artwork: state.entries.flatMap((entry) => entry.blocks).filter((block) => block.role === "full-page").length,
+    pages: state.imageSlots.filter((slot) => slot.fullPage).map((slot) => slot.page)
+  }));
+  assert.equal(demo.artwork, 4, "The cover and three image-only menu pages are kept");
+  assert.deepEqual(demo.pages, [1, 7, 19, 29]);
+
+  const source = await maker.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 360;
+    canvas.height = 900;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#b78a39";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const art = canvas.toDataURL("image/png");
+    const menu = "![menu](" + art + "){position:absolute,width:100%,height:100%}";
+    const background = "![background](" + art + "){position:absolute,width:100%,height:100%}";
+    return ["## First", "A normal text page.", menu,
+      "\\page", "{{pageNumber,auto}}", menu, "\\page", background,
+      "\\page", "## Second", "Another normal text page.", background,
+      "![illustration](" + art + ")"].join("\n");
+  });
+  await maker.upload("mdInput", "image-only-pages.md", source);
+  await maker.until(() => state.entries[0]?.title === "First", "Image-only page fixture imported");
+  await maker.until(() => document.querySelector(".page-art--full-page img")?.naturalWidth === 360, "Full-page artwork image loads");
+  const art = await maker.evaluate(() => {
+    const first = state.entries[0];
+    const second = state.entries[1];
+    const image = document.querySelector(".page-art--full-page img");
+    const config = standardConversionConfig();
+    config.overrides = [{ match: { alt: "menu" }, action: "ignore" }];
+    const explicit = buildBookPackage(state.source, "image-only-pages.md", parseDocument(state.source, config), config);
+    return {
+      first: first.blocks.filter((block) => block.type === "image").map(({ role }) => role),
+      second: second.blocks.filter((block) => block.type === "image").map(({ role }) => role),
+      pages: state.imageSlots.map(({ page }) => page),
+      maxHeight: getComputedStyle(image).maxHeight,
+      sourceUnchanged: !state.source.includes(IMAGE_ONLY_PAGE_MARKER),
+      explicitIgnore: explicit.entries[0].blocks.filter((block) => block.type === "image").length,
+      book: window.bookEditing.exportPackage()
+    };
+  });
+  assert.deepEqual(art.first, ["full-page", "full-page"]);
+  assert.deepEqual(art.second, ["illustration"]);
+  assert.deepEqual(art.pages, [2, 3, 4], "Recovery uses the actual kept image occurrence, not an ignored occurrence with the same URL");
+  assert.equal(art.maxHeight, "none");
+  assert.ok(art.sourceUnchanged);
+  assert.equal(art.explicitIgnore, 1, "Explicit per-image ignore overrides still apply");
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader artwork test ready");
+  await reader.upload("jsonInput", "image-only-pages.json", JSON.stringify(art.book));
+  await reader.until(() => document.querySelector(".page-art--full-page img")?.naturalWidth === 360, "Reader loads exported full-page artwork");
+  assert.equal(await reader.evaluate(() => document.querySelectorAll(".page-art--full-page").length), 2);
+  assert.equal(await reader.evaluate(() => getComputedStyle(document.querySelector(".page-art--full-page img")).maxHeight), "none");
 }
 
 async function smokePartsAndBreaks(browser, width) {

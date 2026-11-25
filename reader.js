@@ -113,7 +113,7 @@ function renderBlock(block, assets, entryIndex, blockIndex) {
     const original = assets.find((candidate) => candidate.id === block.assetId);
     if (!original) return "";
     const asset = { ...original, src: readerState.bundledImages.get(original.src) || original.src };
-    const semanticClass = block.role === "emblem" ? " entry-emblem" : "";
+    const semanticClass = block.role === "emblem" ? " entry-emblem" : block.role === "full-page" ? " page-art--full-page" : "";
     const placementClass = block.placement === "entry-top-right" ? " entry-emblem--top-right" : "";
     const customClass = block.className ? ` ${block.className.replace(/[^a-z0-9_-]/gi, "")}` : "";
     const className = `${semanticClass}${placementClass}${customClass}`;
