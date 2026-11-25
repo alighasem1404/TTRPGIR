@@ -14,7 +14,7 @@ The local tools are intentionally separated:
 
 Book Maker exports a ZIP once a replacement image has been applied. The archive contains `book.json` at the top level and the recovered WebP files in `images/`. Each recovered asset points to its file with an archive-relative path such as `images/moonlit-market.webp`. Original asset URLs still apply to figures without replacements.
 
-Open the ZIP directly in the Reader to use its bundled images offline. The Reader also accepts older ZIPs with bundled PNG images. Any original image URLs that point to the web still need a network connection. You can extract the ZIP to reuse the image files separately. The archive supports Book JSON v1 and v2.
+Open the ZIP directly in the Reader to use its bundled images offline. The Reader also accepts older ZIPs with bundled PNG images. Any original image URLs that point to the web still need a network connection. You can extract the ZIP to reuse the image files separately. The archive supports Book JSON v1, v2, and v3.
 
 ## Responsibilities
 
@@ -42,6 +42,18 @@ These rules apply to every book unless a future format version changes them:
 8. A semantic image placement such as `entry-top-right` may be defined by a builder profile when a book needs an emblem or similar feature art beside an entry heading.
 
 9. Explicit HTML line breaks (`<br>`, `<br/>`, `<br />`) become newline characters (`\n`) in text fields. Both the Maker and Reader display these as line breaks.
+
+## Link blocks
+
+A standalone Markdown link such as `[Read the guide](https://example.com/guide)` is stored as a dedicated content block:
+
+```json
+{ "type": "link", "text": "Read the guide", "url": "https://example.com/guide" }
+```
+
+The label and destination can be edited independently in the Maker's preview editor. Link blocks accept absolute HTTP and HTTPS URLs and open in a new tab. The Reader styles the label as clickable text. Links embedded within paragraphs, lists, or tables remain inline Markdown. Link blocks may also belong to a stat-block group.
+
+For an older package, **Reprocess book** converts unstyled paragraphs containing only a valid standalone Markdown link into link blocks, retaining their position and any stat-group membership. It does not split mixed-text paragraphs or change their inline links.
 
 ## Monster stat blocks
 
@@ -72,11 +84,11 @@ Applying the selection inserts only new image blocks at the chosen boundaries. E
 
 ## Recovering stat-block grouping from older exports
 
-The **Stat blocks** restore mode detects the original monster wrappers, matches legacy entry IDs and nearby block boundaries, and proposes ranges of existing blocks to assign a statBlock ID. It does not copy the original stat values over edited ones. Ambiguous boundaries require manual review. If a wrapper spans legacy entries, its internal entry boundaries are merged so the card remains contiguous. A separately listed legacy monster entry can optionally be folded into its predecessor; the preview identifies these merges and their entry count impact. Every existing block remains in its original order, with surviving entry metadata and assets preserved. Legacy double-colon stat rows are displayed with line breaks without rewriting stored text. The resulting package uses schema version 2.
+The **Stat blocks** restore mode detects the original monster wrappers, matches legacy entry IDs and nearby block boundaries, and proposes ranges of existing blocks to assign a statBlock ID. It does not copy the original stat values over edited ones. Ambiguous boundaries require manual review. If a wrapper spans legacy entries, its internal entry boundaries are merged so the card remains contiguous. A separately listed legacy monster entry can optionally be folded into its predecessor; the preview identifies these merges and their entry count impact. Every existing block remains in its original order, with surviving entry metadata and assets preserved. Legacy double-colon stat rows are displayed with line breaks without rewriting stored text. The resulting package uses schema version 2 or later.
 
 ## Versioning rules
 
-- Increase `schemaVersion` when the package shape changes. Version 2 supports the optional statBlock group identifier; packages that do not use grouping can remain version 1. Both versions are readable.
+- Increase `schemaVersion` when the package shape changes. Version 2 supports the optional statBlock group identifier; version 3 adds the link block type. Packages without newer block types or grouping may keep their earlier version; all three versions are readable.
 - Keep old readers able to reject unsupported major versions cleanly.
 - Use stable IDs for books, entries, blocks, and assets.
 - Store the source filename and later a source hash so an exported package can be traced back to its Markdown.

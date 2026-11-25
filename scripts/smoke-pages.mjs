@@ -50,11 +50,13 @@ async function smoke(width) {
   try {
     const maker = await browser.page("bookmaker.html", width);
     await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Maker demo");
+    await smokeDemoSampleAndVersion(maker, browser, width);
     await smokeImageOnlyPages(maker, browser, width);
     await smokePartsAndBreaks(browser, width);
     await smokeRestoreFromMarkdown(browser, width);
     await smokeMonsterStatBlocks(browser, width);
     await smokeStatRestore(browser, width);
+    await smokeLinkBlocks(browser, width);
     const pdfBase = new URL(await maker.evaluate(() => {
       const script = document.querySelector("script[data-pdf-engine]");
       return new URL(script.dataset.pdfEngine, script.src).href;
@@ -915,6 +917,35 @@ async function smokeOrganizationAndCaptions(browser, width) {
     !document.getElementById("pageViewport").textContent, "Reader clears the previous book after every entry was removed");
 }
 
+async function smokeDemoSampleAndVersion(maker, browser, width) {
+  const readSample = () => ({
+    version: document.querySelector(".brand-mark small #appVersion")?.textContent,
+    name: document.querySelector(".stat-block h2")?.textContent,
+    tables: document.querySelectorAll(".stat-block-tables table").length,
+    sections: [...document.querySelectorAll(".stat-block h3")].map((heading) => heading.textContent),
+    contents: [...document.querySelectorAll("#contents .page-title")].map((item) => item.textContent)
+  });
+  const makerIndex = await maker.evaluate(() => state.entries.findIndex((entry) => entry.title === "Stat block example"));
+  assert.ok(makerIndex >= 0, "Maker demo includes a stat block example");
+  await maker.evaluate(() => goToPage(state.entries.findIndex((entry) => entry.title === "Stat block example")));
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader sample ready");
+  const readerIndex = await reader.evaluate(() => readerState.entries.findIndex((entry) => entry.title === "Stat block example"));
+  assert.ok(readerIndex >= 0, "Reader demo includes a stat block example");
+  await reader.evaluate(() => goToEntry(readerState.entries.findIndex((entry) => entry.title === "Stat block example")));
+  const makerSample = await maker.evaluate(readSample);
+  const readerSample = await reader.evaluate(readSample);
+  for (const sample of [makerSample, readerSample]) {
+    assert.match(sample.version, /^v\d+\.\d+\.\d+(?:-local|\+\d+(?:\.\d+)?|\+[a-f0-9]{7})$/i);
+    assert.equal(sample.name, "Abelard “the Sévère” Alba");
+    assert.equal(sample.tables, 2);
+    assert.deepEqual(sample.sections, ["Traits", "Actions", "Bonus Actions", "Reactions"]);
+    assert.ok(sample.contents.includes("Stat block example"));
+    assert.ok(!sample.contents.includes(sample.name));
+  }
+  assert.equal(makerSample.version, readerSample.version);
+}
+
 async function smokeImageOnlyPages(maker, browser, width) {
   const demo = await maker.evaluate(() => ({
     artwork: state.entries.flatMap((entry) => entry.blocks).filter((block) => block.role === "full-page").length,
@@ -1079,7 +1110,8 @@ async function smokePartsAndBreaks(browser, width) {
       ids: plan.book.entries.map(({ id }) => id), repeated: planBookReprocessing(plan.book, 2).changed };
   }, result.book);
   assert.ok(planned.unchanged);
-  assert.ok(planned.results.every((result) => result.changed));
+  assert.ok(planned.results.filter((result) => ["line-breaks", "part-headings"].includes(result.id)).every((result) => result.changed));
+  assert.equal(planned.results.find((result) => result.id === "link-blocks").changed, false);
   assert.deepEqual(planned.ids, result.book.entries.slice(1).map(({ id }) => id));
   assert.equal(planned.repeated, false);
 
@@ -1617,6 +1649,125 @@ async function smokeStatRestore(browser, width) {
   await reader.upload("jsonInput", "recovered-stat.zip", exported.bytes);
   await reader.until(() => document.querySelector(".stat-block h2")?.textContent === "Edited First Monster", "Reader opens recovered stat groups");
   assert.equal(await reader.evaluate(() => document.querySelectorAll(".stat-block").length), 2);
+}
+
+async function smokeLinkBlocks(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Link block fixture Maker");
+  const source = [
+    "## Resources", "Paragraph before the link.", "[Read the **guide**](https://example.com/a(b)?q=one&other=two)", "Paragraph after the link.",
+    "", "An inline [reference](https://example.com/info) stays in this paragraph.", "",
+    "{{monster", "## Example creature", "[Stat reference](<https://example.com/stat#rules>)", "}}",
+    "## Next", "Other content."
+  ].join("\n");
+  await maker.upload("mdInput", "link-fixture.md", source);
+  await maker.until(() => state.entries[0]?.title === "Resources", "Standalone links imported");
+  const imported = await maker.evaluate(() => {
+    const link = document.querySelector(".book-link-block a");
+    const book = JSON.parse(JSON.stringify(state.bookPackage));
+    const legacy = JSON.parse(JSON.stringify(book));
+    legacy.schemaVersion = 2;
+    for (const entry of legacy.entries) entry.blocks = entry.blocks.map((block) => {
+      if (block.type !== "link") return block;
+      const { url, ...rest } = block;
+      return { ...rest, type: "paragraph", text: "[" + block.text + "](" + url + ")" };
+    });
+    return {
+      version: book.schemaVersion, types: book.entries[0].blocks.map((block) => block.type),
+      href: link.getAttribute("href"), bold: link.querySelector("strong")?.textContent,
+      target: link.target, rel: link.rel, cards: document.querySelectorAll(".stat-block .book-link-block").length,
+      inline: book.entries[0].blocks.find((block) => block.text?.startsWith("An inline"))?.type,
+      adjacent: book.entries[0].blocks.find((block) => block.text === "Paragraph after the link.")?.type,
+      invalid: parseStandaloneBookLink("[Invalid](ftp://example.com/path)"),
+      legacy
+    };
+  });
+  assert.equal(imported.version, 3);
+  assert.equal(imported.types.filter((type) => type === "link").length, 2);
+  assert.equal(imported.href, "https://example.com/a(b)?q=one&other=two");
+  assert.equal(imported.bold, "guide");
+  assert.equal(imported.target, "_blank");
+  assert.match(imported.rel, /noopener/);
+  assert.equal(imported.cards, 1);
+  assert.equal(imported.inline, "paragraph");
+  assert.equal(imported.adjacent, "paragraph");
+  assert.equal(imported.invalid, null);
+
+  const edited = await maker.evaluate(() => {
+    document.getElementById("toggleBookEditing").click();
+    const first = state.entries[0].blocks.findIndex((block) => block.type === "link");
+    document.querySelector(`[data-book-edit="${first}"]`).click();
+    const form = document.getElementById("bookEditingForm");
+    const opened = { format: form.elements.format.value, url: form.elements.url.value };
+    form.elements.text.value = "Updated guide";
+    form.elements.url.value = "https://example.com/updated";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    return { opened, block: state.entries[0].blocks[first] };
+  });
+  assert.deepEqual(edited.opened, { format: "link", url: "https://example.com/a(b)?q=one&other=two" });
+  assert.deepEqual(edited.block, { type: "link", text: "Updated guide", url: "https://example.com/updated" });
+
+  const added = await maker.evaluate(() => {
+    const groupIndex = state.entries[0].blocks.findIndex((block) => block.statBlock && block.type === "link");
+    const group = state.entries[0].blocks[groupIndex].statBlock;
+    document.querySelector(`[data-book-add="${groupIndex + 1}"]`).click();
+    const form = document.getElementById("bookEditingForm");
+    form.elements.format.value = "link";
+    form.elements.format.dispatchEvent(new Event("change"));
+    form.elements.text.value = "Extra stat resource";
+    form.elements.url.value = "ftp://example.com/resource";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    return { visible: !document.getElementById("editLinkUrlField").hidden, required: form.elements.url.required, group };
+  });
+  assert.ok(added.visible && added.required);
+  await maker.until(() => document.getElementById("bookEditingStatus").textContent.includes("valid absolute HTTP or HTTPS URL"), "Invalid link destination rejected");
+  assert.equal(await maker.evaluate(() => state.entries[0].blocks.some((block) => block.text === "Extra stat resource")), false);
+  await maker.evaluate(() => {
+    const form = document.getElementById("bookEditingForm");
+    form.elements.url.value = "https://example.com/extra";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+  });
+  await maker.until(() => state.entries[0].blocks.some((block) => block.text === "Extra stat resource"), "Manual link block added");
+  const converted = await maker.evaluate(() => {
+    const group = state.entries[0].blocks.find((block) => block.text === "Extra stat resource");
+    const index = state.entries[0].blocks.findIndex((block) => block.text === "Paragraph after the link.");
+    document.querySelector(`[data-book-edit="${index}"]`).click();
+    const form = document.getElementById("bookEditingForm");
+    form.elements.format.value = "link";
+    form.elements.format.dispatchEvent(new Event("change"));
+    form.elements.url.value = "https://example.com/converted";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    return { group: group.statBlock, converted: state.entries[0].blocks[index], book: window.bookEditing.exportPackage() };
+  });
+  assert.equal(converted.group, added.group);
+  assert.deepEqual(converted.converted, { type: "link", text: "Paragraph after the link.", url: "https://example.com/converted" });
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader link fixture ready");
+  await reader.upload("jsonInput", "link-blocks.json", JSON.stringify(converted.book));
+  await reader.until(() => document.querySelector('.book-link-block a[href="https://example.com/updated"]'), "Reader displays edited link");
+  assert.equal(await reader.evaluate(() => document.querySelectorAll(".book-link-block a").length), 4);
+  assert.equal(await reader.evaluate(() => document.querySelectorAll(".stat-block .book-link-block a").length), 2);
+
+  // Reprocess old standalone Markdown links without changing inline prose.
+  await maker.upload("jsonInput", "legacy-links.json", JSON.stringify(imported.legacy));
+  await maker.until(() => state.bookPackage?.schemaVersion === 2, "Legacy link package ready");
+  const upgraded = await maker.evaluate(() => {
+    document.getElementById("reprocessBook").click();
+    const available = !document.getElementById("applyReprocess").disabled;
+    const rules = document.getElementById("reprocessResults").textContent;
+    document.getElementById("applyReprocess").click();
+    const inline = state.entries[0].blocks.find((block) => block.text?.startsWith("An inline"));
+    const result = planBookReprocessing(state.bookPackage, 2);
+    return { available, rules, version: state.bookPackage.schemaVersion, count: state.entries[0].blocks.filter((block) => block.type === "link").length,
+      grouped: state.entries[0].blocks.some((block) => block.type === "link" && block.statBlock),
+      inline: inline.text, repeated: result.changed };
+  });
+  assert.ok(upgraded.available && upgraded.grouped);
+  assert.match(upgraded.rules, /Converted 2 standalone Markdown links/);
+  assert.equal(upgraded.version, 3);
+  assert.equal(upgraded.count, 2);
+  assert.equal(upgraded.inline, "An inline [reference](https://example.com/info) stays in this paragraph.");
+  assert.equal(upgraded.repeated, false);
 }
 
 async function smokeHeadingGroupOrdering(browser, width) {

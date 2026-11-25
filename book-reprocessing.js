@@ -1,7 +1,8 @@
 // Add new, repeatable package upgrades here as the Maker's conversion rules evolve.
 const BOOK_REPROCESS_RULES = [
   { id: "line-breaks", label: "Line breaks", run: reprocessLineBreaks },
-  { id: "part-headings", label: "H1 book parts", run: reprocessPartHeadings }
+  { id: "part-headings", label: "H1 book parts", run: reprocessPartHeadings },
+  { id: "link-blocks", label: "Link blocks", run: reprocessLinkBlocks }
 ];
 
 let reprocessDraft;
@@ -44,6 +45,21 @@ function reprocessLineBreaks({ book, recoveries }) {
     fields += 1;
   }
   return { changed: fields > 0, message: fields ? `${fields} text field${fields === 1 ? "" : "s"} converted to real line breaks.` : "Already up to date." };
+}
+
+function reprocessLinkBlocks({ book }) {
+  let count = 0;
+  for (const entry of book.entries) {
+    entry.blocks = entry.blocks.map((block) => {
+      if (block.type !== "paragraph" || block.style) return block;
+      const link = parseStandaloneBookLink(block.text);
+      if (!link) return block;
+      count += 1;
+      return { ...block, ...link };
+    });
+  }
+  if (count) book.schemaVersion = bookSchemaVersion(book.entries, book.schemaVersion);
+  return { changed: count > 0, message: count ? `Converted ${count} standalone Markdown link${count === 1 ? "" : "s"} into link blocks.` : "Already up to date." };
 }
 
 function reprocessPartHeadings({ book, level, mergedEntries }) {

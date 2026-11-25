@@ -27,7 +27,8 @@ button { cursor: pointer; }
 .topbar { height: 76px; display: flex; align-items: center; gap: 28px; padding: 0 32px; color: #f9f0dd; border-bottom: 1px solid rgba(255,255,255,.1); }
 .brand-mark { display: flex; align-items: center; gap: 11px; min-width: 220px; letter-spacing: .1em; }
 .brand-mark strong { display: block; font-family: Georgia, serif; font-size: 16px; letter-spacing: .16em; }
-.brand-mark small { display: block; margin-top: 3px; color: #cdbda8; font-size: 8px; letter-spacing: .28em; }
+.brand-mark small { display: flex; align-items: center; gap: 7px; margin-top: 3px; color: #cdbda8; font-size: 8px; letter-spacing: .28em; white-space: nowrap; }
+.brand-version { display: inline-block; color: #f4d89e; background: rgba(217,184,108,.12); border: 1px solid rgba(217,184,108,.35); border-radius: 3px; padding: 2px 4px; font: 600 10px/1.2 Inter, sans-serif; letter-spacing: 0; }
 .brand-glyph { color: var(--gold-light); font-size: 25px; }
 .topbar-center { display: flex; align-items: center; gap: 15px; flex: 1; }
 .eyebrow { color: #9b7e78; font-size: 10px; font-weight: 800; letter-spacing: .18em; }
@@ -324,6 +325,11 @@ button { cursor: pointer; }
 .page-content :is(h5, h6) { margin: 14px 0 8px; font-size: 12px; line-height: 1.45; }
 .page-content p { margin: 0 0 12px; font: 14px/1.55 var(--book-body-font); }
 .page-content strong { color: var(--wine); }
+.page-content .book-link-block a { color: var(--wine-dark); text-decoration: underline; text-decoration-color: var(--gold-dark); text-underline-offset: 3px; font-weight: 700; overflow-wrap: anywhere; }
+.page-content .book-link-block a:hover { color: var(--wine); text-decoration-thickness: 2px; }
+.page-content .book-link-block a:focus-visible { outline: 2px solid var(--gold-dark); outline-offset: 3px; border-radius: 2px; }
+.book-link-arrow { font-size: .85em; }
+#editLinkUrlField[hidden] { display: none; }
 .page-content em { color: var(--ink-soft); }
 .page-content ul { margin: 7px 0 15px; padding-left: 23px; font: 14px/1.5 var(--book-body-font); }
 .page-content li { margin: 4px 0; }

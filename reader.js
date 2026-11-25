@@ -96,6 +96,7 @@ function goToEntry(index) {
 }
 
 function renderBlock(block, assets, entryIndex, blockIndex) {
+  if (block.type === "link") return renderBookLink(block);
   if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 && !block.statBlock ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
   if (block.type === "paragraph") {
     const text = inlineMarkdown(block.statBlock ? statBlockText(block.text) : block.text);
@@ -175,6 +176,7 @@ function validateBookPackage(bookPackage) {
 
 function isReadableBlock(block) {
   if (!block || typeof block.type !== "string" || block.statBlock !== undefined && (typeof block.statBlock !== "string" || !block.statBlock.trim())) return false;
+  if (block.type === "link") return typeof block.text === "string" && Boolean(block.text.trim()) && Boolean(safeBookLinkUrl(block.url));
   if (block.type === "image") return [block.className, block.alt, block.caption].every((value) => value === undefined || typeof value === "string");
   if (block.type === "list") return Array.isArray(block.items);
   if (block.type === "table") return Array.isArray(block.columns) && Array.isArray(block.rows) && block.rows.every(Array.isArray);
@@ -183,7 +185,15 @@ function isReadableBlock(block) {
 }
 
 function normalizeBreaks(value) { return String(value).replace(/[ \t]*<br[ \t]*\/?[ \t]*>[ \t]*/gi, "\n").replace(/\r\n?/g, "\n"); }
-function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
+function safeBookLinkUrl(value) {
+  if (typeof value !== "string") return "";
+  const url = value.trim();
+  if (!/^https?:\/\/[^\s<>\x00-\x1f\x7f]+$/i.test(url)) return "";
+  try { return ["https:", "http:"].includes(new URL(url).protocol) ? url : ""; }
+  catch { return ""; }
+}
+
+function inlineMarkdown(value, links = true) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); if (!links) return html.replace(/\n/g, "<br>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function escapeAttribute(value) { return escapeHtml(value); }
 function setStatus(message) { $("#sourceStatus").innerHTML = `<i></i> ${escapeHtml(message)}`; }

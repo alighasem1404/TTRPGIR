@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=29" />
+    <link rel="stylesheet" href="styles.css?v=31" />
   </head>
   <body>
     <div class="app-shell maker-page">
       <header class="topbar">
         <div class="brand-mark" aria-label="Euphoria Content Lab">
           <span class="brand-glyph">✦</span>
-          <span><strong>EUPHORIA</strong><small>CONTENT LAB</small></span>
+          <span><strong>EUPHORIA</strong><small>CONTENT LAB <span id="appVersion" class="brand-version">v—</span></small></span>
         </div>
         <div class="topbar-center">
           <span class="eyebrow">PRIVATE BOOK MAKER</span>
@@ -340,15 +340,16 @@
       </dialog>
       <div id="notice" class="notice" role="status" hidden></div>
     </div>
+    <script src="app-version.js?v=1"></script>
     <script src="image-viewer.js?v=2"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=4"></script>
-    <script src="book-contents.js?v=3"></script>
-    <script src="app.js?v=33"></script>
-    <script src="book-restore.js?v=3"></script>
-    <script src="book-stat-restore.js?v=1"></script>
-    <script src="book-reprocessing.js?v=2"></script>
-    <script src="book-editing.js?v=13"></script>
+    <script src="book-contents.js?v=4"></script>
+    <script src="app.js?v=34"></script>
+    <script src="book-restore.js?v=4"></script>
+    <script src="book-stat-restore.js?v=2"></script>
+    <script src="book-reprocessing.js?v=3"></script>
+    <script src="book-editing.js?v=14"></script>
     <script src="pdf-import.js?v=7" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
     <script src="image-recovery.js?v=7"></script>
   </body>

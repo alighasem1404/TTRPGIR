@@ -11,6 +11,7 @@ The Markdown remains the source of truth. The web reader presents the content se
 - `#` headings become non-clickable part labels in the contents list, grouping the following entries.
 - `##` headings become clickable content entries.
 - `###` headings become sections inside the current entry.
+- A standalone Markdown link with an absolute HTTP or HTTPS URL becomes a dedicated link block. Links inside other text remain inline.
 - `####` headings become subsections.
 - `#####` headings become notes, labels, or small callouts.
 - Content continues across `\page` markers. `\page` is retained only as source metadata and must not split a web entry.

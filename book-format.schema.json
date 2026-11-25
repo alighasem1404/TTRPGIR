@@ -92,6 +92,7 @@
       "oneOf": [
         { "$ref": "#/$defs/heading" },
         { "$ref": "#/$defs/paragraph" },
+        { "$ref": "#/$defs/link" },
         { "$ref": "#/$defs/image" },
         { "$ref": "#/$defs/list" },
         { "$ref": "#/$defs/table" },
@@ -109,6 +110,12 @@
       "type": "object",
       "required": ["type", "text"],
       "properties": { "type": { "const": "paragraph" }, "statBlock": { "type": "string", "minLength": 1 }, "text": { "type": "string" }, "style": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "link": {
+      "type": "object",
+      "required": ["type", "text", "url"],
+      "properties": { "type": { "const": "link" }, "statBlock": { "type": "string", "minLength": 1 }, "text": { "type": "string", "minLength": 1 }, "url": { "type": "string", "format": "uri", "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://.+$" } },
       "additionalProperties": false
     },
     "image": {

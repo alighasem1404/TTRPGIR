@@ -443,7 +443,7 @@ function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacemen
   state.visualEdits = true;
   state.entries = preserveExistingData ? entries : entries.map((entry, order) => ({ ...entry, order }));
   state.bookPackage.entries = state.entries;
-  if (entries.some((entry) => entry.blocks.some((block) => block.statBlock))) state.bookPackage.schemaVersion = Math.max(state.bookPackage.schemaVersion, 2);
+  state.bookPackage.schemaVersion = bookSchemaVersion(entries, state.bookPackage.schemaVersion);
   $("#themeLabel").textContent = `JSON v${state.bookPackage.schemaVersion}`;
   if (!preserveExistingData) normalizeBookText(state.bookPackage);
   const index = state.entries.findIndex(({ id }) => id === currentId);
@@ -636,7 +636,7 @@ function buildBookPackage(source, fileName, parsed, config = {}) {
   const metadata = parsed.metadata;
   return normalizeBookText({
     format: "ttrpg-book",
-    schemaVersion: entries.some((entry) => entry.blocks.some((block) => block.statBlock)) ? 2 : 1,
+    schemaVersion: bookSchemaVersion(entries),
     book: { id: slugify(metadata.title) || "untitled-book", title: metadata.title, description: metadata.description || "Imported Homebrewery Markdown book.", version: "0.1.0", tags: ["homebrewery-import"] },
     source: { format: "homebrewery-markdown", fileName },
     conversion: { entryHeadingLevel: config.rules?.entryHeadingLevel || 2, pageBreaks: config.rules?.pageBreaks || "ignore", imagePolicy: { defaultPlacement: config.rules?.images?.defaultPlacement || "inline", ignoredRoles: ["background", "page-overlay", "menu", "decorative-banner"], ignorePositioning: config.rules?.images?.ignorePositioning !== false } },
@@ -701,6 +701,8 @@ function markdownToPlainBlocks(source, config, assets, stat = false) {
     }
     const heading = parseHeadingLine(line);
     if (heading) { blocks.push({ type: "heading", level: heading.level, text: stripMarkup(heading.title) }); index += 1; continue; }
+    const link = parseStandaloneBookLink(line);
+    if (link) { blocks.push(link); index += 1; continue; }
     if (/^\|.*\|$/.test(line)) {
       const tableLines = [];
       while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index].trim())) tableLines.push(lines[index++].trim());
@@ -738,6 +740,41 @@ function markdownToPlainBlocks(source, config, assets, stat = false) {
     blocks.push({ type: "paragraph", text: paragraph.join(stat ? "\n" : " ") });
   }
   return blocks;
+}
+
+function safeBookLinkUrl(value) {
+  if (typeof value !== "string") return "";
+  const url = value.trim();
+  if (!/^https?:\/\/[^\s<>\x00-\x1f\x7f]+$/i.test(url)) return "";
+  try { return ["https:", "http:"].includes(new URL(url).protocol) ? url : ""; }
+  catch { return ""; }
+}
+
+function parseStandaloneBookLink(value) {
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^\[([^\]\r\n]+)\]\(([^\r\n]*)\)$/);
+  if (!match || !normalizeBreaks(match[1]).trim()) return null;
+  let url = match[2].trim();
+  if (url.startsWith("<") && url.endsWith(">")) url = url.slice(1, -1);
+  else {
+    let depth = 0;
+    for (const char of url) {
+      if (char === "(") depth += 1;
+      if (char === ")" && --depth < 0) return null;
+    }
+    if (depth) return null;
+  }
+  url = safeBookLinkUrl(url);
+  return url ? { type: "link", text: match[1], url } : null;
+}
+
+function bookSchemaVersion(entries, current = 1) {
+  let version = current;
+  for (const entry of entries) for (const block of entry.blocks) {
+    if (block.type === "link") version = Math.max(version, 3);
+    else if (block.statBlock) version = Math.max(version, 2);
+  }
+  return version;
 }
 
 function getAssetId(alt, url, assets) {
@@ -1039,6 +1076,7 @@ function shouldIgnoreImage(alt, url, config = {}, fullPage = false) {
 }
 
 function renderPackageBlock(block, assets, entryIndex, blockIndex) {
+  if (block.type === "link") return renderBookLink(block);
   if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 && !block.statBlock ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
   if (block.type === "paragraph") {
     const text = inlineMarkdown(block.statBlock ? statBlockText(block.text) : block.text);
@@ -1328,7 +1366,8 @@ function validateBookPackage(bookPackage) {
     entryIds.add(entry.id);
     for (const block of entry.blocks) {
       if (!block || typeof block.type !== "string" || block.statBlock !== undefined && (typeof block.statBlock !== "string" || !block.statBlock.trim())) throw new Error("An entry contains an invalid content block.");
-      const textValid = !["heading", "paragraph"].includes(block.type) || typeof block.text === "string";
+      const textValid = !["heading", "paragraph", "link"].includes(block.type) || typeof block.text === "string";
+      const linkValid = block.type !== "link" || typeof block.text === "string" && Boolean(block.text.trim()) && Boolean(safeBookLinkUrl(block.url));
       const headingValid = block.type !== "heading" || Number.isInteger(block.level) && block.level >= 1 && block.level <= 6;
       const listValid = block.type !== "list" || strings(block.items) && (block.ordered === undefined || typeof block.ordered === "boolean") &&
         (block.start === undefined || Number.isSafeInteger(block.start) && block.start >= 0);
@@ -1337,7 +1376,7 @@ function validateBookPackage(bookPackage) {
         .every((value) => value === undefined || typeof value === "string");
       const videoValid = block.type !== "embed" || block.kind !== "video-grid" || typeof block.title === "string" &&
         Array.isArray(block.items) && block.items.every((item) => item && typeof item.url === "string" && typeof item.thumbnail === "string");
-      if (!textValid || !headingValid || !listValid || !tableValid || !imageValid || !videoValid) throw new Error(`Invalid content in ${entry.title}.`);
+      if (!textValid || !linkValid || !headingValid || !listValid || !tableValid || !imageValid || !videoValid) throw new Error(`Invalid content in ${entry.title}.`);
     }
   }
 }
@@ -1348,7 +1387,7 @@ function parseMetadata(block) {
 }
 
 function listItemText(line) { return line.match(/^(?:[-*+]|\d{1,9}[.)])\s+(\S.*)$/)?.[1] ?? null; }
-function isStructuralLine(line) { return /^(#{1,6})\s+/.test(line) || /^!\[/.test(line) || /^\|.*\|$/.test(line) || listItemText(line) !== null || line === "<!--COLUMN_BREAK-->" || /^<div\b/i.test(line) || /^---+$/.test(line); }
+function isStructuralLine(line) { return /^(#{1,6})\s+/.test(line) || /^!\[/.test(line) || /^\|.*\|$/.test(line) || listItemText(line) !== null || parseStandaloneBookLink(line) !== null || line === "<!--COLUMN_BREAK-->" || /^<div\b/i.test(line) || /^---+$/.test(line); }
 function setStatus(message) { $("#sourceStatus").innerHTML = `<i></i> ${escapeHtml(message)}`; }
 function showNotice(message) { const notice = $("#notice"); notice.textContent = message; notice.hidden = false; setTimeout(() => { notice.hidden = true; }, 8000); }
 function stripMarkup(value) { return unwrapHomebreweryText(value).replace(/[*_`]/g, "").trim(); }
@@ -1377,6 +1416,6 @@ function normalizeBookText(bookPackage, onChange = () => {}) {
   }
   return bookPackage;
 }
-function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
+function inlineMarkdown(value, links = true) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); if (!links) return html.replace(/\n/g, "<br>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function escapeAttribute(value) { return escapeHtml(value); }

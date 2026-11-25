@@ -21,11 +21,19 @@ This adds selected image blocks and any required assets without reimporting the 
 
 For an older book whose monster wrappers were lost, choose **Stat blocks** instead. Review the suggested first and last included blocks, then select the groups to recover. The tool can merge redundant legacy monster entries into the preceding entry (and merge internal entry boundaries when one stat block spans several entries); all existing blocks remain in their original order and retain their edited content. You can leave a legacy entry separate by clearing its optional merge checkbox. Apply **Recover selected stat blocks** and export the result. Image and stat-block updates are applied separately.
 
+## Link blocks
+
+In **Edit preview**, choose **Add below** and set **Format** to **Link** to enter display text and an HTTP or HTTPS destination. Existing paragraph blocks can be converted to links, and existing link blocks can be edited directly. Standalone Markdown links import automatically; **Reprocess book** upgrades standalone links in older packages.
+
 ## GitHub Pages
 
 In the repository’s **Settings → Pages**, select **GitHub Actions** as the publishing source. The [Pages workflow](.github/workflows/pages.yml) builds and tests the site, publishes it on pushes to `main`, and verifies it at the resulting Pages URL. The Reader is the home page and links to `bookmaker.html`.
 
 The workflow publishes the app, its bundled dependencies, and the Euphoria demo files listed in the build script. Bookmaker processes files selected by a visitor in the browser. Existing web image URLs are still loaded from their original hosts.
+
+The main English Euphoria demo includes a **Stat block example** entry showing Abelard's complete monster stat block in Bookmaker and the Reader.
+
+The version beside **CONTENT LAB** identifies the running app, independently of the book schema version. The base version is defined in `app-version.js`. Local development shows `v0.1.0-local`; GitHub Pages builds append the workflow run number (and retry attempt, when applicable), such as `v0.1.0+123`. Hover over the badge on a published build to see its commit identifier.
 
 ## Build and test locally
 

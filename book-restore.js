@@ -13,6 +13,8 @@ function restoreUrlKey(value) {
 }
 
 function restoreAnchorKey(block) {
+  const link = block.type === "link" ? block : block.type === "paragraph" ? parseStandaloneBookLink(block.text) : null;
+  if (link) return `link:${restoreTextKey(link.text)}:${restoreUrlKey(link.url)}`;
   if (block.type === "heading") return `h${block.level}:${restoreTextKey(block.text)}`;
   if (block.type === "paragraph") return `p:${restoreTextKey(block.text)}`;
   if (block.type === "list") return `list:${JSON.stringify(block.items.map(restoreTextKey))}`;
@@ -206,6 +208,7 @@ function scanRestoreImages(book, markdown, fileName, config = {}) {
 }
 
 function restoreBlockLabel(block, book) {
+  if (block.type === "link") return `Link: ${block.text}`;
   if (block.type === "heading") return `H${block.level}: ${block.text}`;
   if (block.type === "paragraph") return block.text;
   if (block.type === "image") return `Image: ${block.caption ?? block.alt ?? book.assets.find((asset) => asset.id === block.assetId)?.alt ?? block.assetId}`;

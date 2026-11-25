@@ -5,7 +5,7 @@
   const message = $("#bookEditingStatus");
   const toggle = $("#toggleBookEditing");
   const editLabels = new Map([["paragraph", "Edit text"], ["heading", "Edit heading"], ["image", "Edit image"],
-    ["table", "Edit table"], ["list", "Edit bullet list"]]);
+    ["table", "Edit table"], ["list", "Edit bullet list"], ["link", "Edit link"]]);
   let action;
   let order;
   let hiddenSections;
@@ -224,13 +224,13 @@
       <label>Replace with <input name="replacement" type="text" autocomplete="off" dir="auto"></label>
       <label>Search in <select name="replaceScope">${displayOptions([["entry", `Current entry — ${entry.title}`], ["book", "Entire book"]], "entry")}</select></label>
       <label class="book-edit-check"><input name="matchCase" type="checkbox"> Match case</label>
-      <p>Replaces literal text in headings, paragraphs, lists, tables, image captions, and alt text. Leave the replacement empty to delete matching text.</p>
+      <p>Replaces literal text in headings, paragraphs, link labels, lists, tables, image captions, and alt text. Link destinations are edited separately. Leave the replacement empty to delete matching text.</p>
       <p id="replaceSummary" role="status">Enter text to find.</p>
       <ul id="replaceExamples" class="book-source-list" aria-label="Replacement preview"></ul>
       <div class="book-edit-actions"><button type="submit" value="save" disabled>Replace all matches</button></div>`, () => {
       const result = replacementPreview(entry);
       if (!result.count) throw new Error("No matching text to replace.");
-      if (result.emptyTitle) throw new Error("A heading or entry title would become empty. Enter replacement text for that title.");
+      if (result.emptyTitle) throw new Error("A heading, entry title, or link label would become empty. Enter replacement text.");
       replacementHistory.push({ entries: state.entries, currentPage: state.currentPage,
         order: [...order], hiddenSections: new Set(hiddenSections),
         captions: new Map(result.recoveries.map(({ key }) => [key, state.recoveredImages.get(key).caption])) });
@@ -248,7 +248,7 @@
     function preview() {
       const result = replacementPreview(entry);
       $("#replaceSummary").textContent = !form.elements.query.value ? "Enter text to find."
-        : result.emptyTitle ? "A heading or entry title would become empty. Enter replacement text for that title."
+        : result.emptyTitle ? "A heading, entry title, or link label would become empty. Enter replacement text."
           : `${result.count} matches in ${result.entryCount} ${result.entryCount === 1 ? "entry" : "entries"}.`;
       const list = $("#replaceExamples");
       list.replaceChildren(...result.examples.map(({ entry, before, after }) => {
@@ -296,9 +296,9 @@
       };
       const blocks = entry.blocks.map((block) => {
         if (block[sourceHidden]) return block;
-        if (block.type === "heading" || block.type === "paragraph") {
+        if (block.type === "heading" || block.type === "paragraph" || block.type === "link") {
           const text = change(block.text);
-          if (block.type === "heading" && !text.trim()) emptyTitle = true;
+          if (["heading", "link"].includes(block.type) && !normalizeBreaks(text).trim()) emptyTitle = true;
           if (!block.statBlock && block.type === "heading" && block.level === 3 && text !== block.text) sectionRenames.push([sectionName(block.text), sectionName(text)]);
           return text === block.text ? block : { ...block, text };
         }
@@ -414,11 +414,12 @@
   function editText(index, add) {
     const entry = currentEntry();
     const block = add ? null : entry.blocks[index];
-    const format = block?.type === "heading" ? `h${block.level}` : block?.style || "paragraph";
+    const format = block?.type === "heading" ? `h${block.level}` : block?.type === "link" ? "link" : block?.style || "paragraph";
     const statBlock = add ? entry.blocks[index - 1]?.statBlock : block?.statBlock;
     const isSection = !statBlock && block?.type === "heading" && block.level === 3;
     const formats = [["paragraph", "Paragraph"], ["book-quote", "Quote"], ["book-callout", "Callout"],
       ...[1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, `Heading H${level}`])];
+    if (add || block?.type === "paragraph" || block?.type === "link") formats.push(["link", "Link"]);
     if (!formats.some(([value]) => value === format)) formats.push([format, "Current style"]);
     if (add) formats.push(["image", "Image"], ["table", "Table"], ["list", "Bullet list"]);
     const otherEntries = state.entries.filter((item) => item !== entry).map(({ id, title }) => [id, title]);
@@ -426,6 +427,7 @@
     open(add ? "Add a block" : "Edit preview block", `
       <label>Format <select name="format">${displayOptions(formats, format)}</select></label>
       <label id="editTextField">Text <textarea name="text" rows="6" dir="auto" required>${escapeHtml(block?.text || "")}</textarea></label>
+      <label id="editLinkUrlField"${format === "link" ? "" : " hidden"}>Destination URL <input name="url" type="url" dir="ltr" placeholder="https://example.com" value="${escapeAttribute(block?.url || "")}"${format === "link" ? " required" : " disabled"}></label>
       ${isSection ? `<label>Player edition <select name="visibility">${displayOptions([["default", "Follow section rule"], ["include", "Include this section"], ["exclude", "Hide this section"]], block[sectionVisibility] || "default")}</select></label>
         ${otherEntries.length ? `<label>Move section to <select name="destination">${displayOptions([["", "Keep in this entry"], ...otherEntries], "")}</select></label>` : ""}` : ""}
       ${scopeField(scopes, block?.type === "paragraph")}
@@ -434,19 +436,26 @@
         ${block?.type === "paragraph" ? '<button type="submit" value="selection">Format selected text</button>' : ""}
         ${!add ? '<button type="submit" value="remove" formnovalidate>Remove block</button>' : ""}
       </div>`, (command) => {
+      const selected = form.elements.format.value;
       const scope = form.elements.scope?.value || "single";
       if (scope !== "single") {
+        if (selected === "link") throw new Error("Choose This item only when creating a link.");
         editMatchingText(scopes.get(scope).targets, block, command);
         return;
       }
-      const selected = form.elements.format.value;
       if (selected === "image") { editImage(index, true); return; }
       if (selected === "table" || selected === "list") { editStructuredBlock(selected, index, true); return; }
       const textField = form.elements.text;
       const value = textField.value;
       if (command !== "remove" && !value.trim()) throw new Error("Enter some text.");
       let replacement = [];
-      if (command === "selection") {
+      if (command !== "remove" && selected === "link") {
+        const text = normalizeBreaks(value.trim());
+        const url = safeBookLinkUrl(form.elements.url.value);
+        if (!text.trim()) throw new Error("Enter the link's display text.");
+        if (!url) throw new Error("Enter a valid absolute HTTP or HTTPS URL.");
+        replacement = [{ type: "link", text, url }];
+      } else if (command === "selection") {
         const { selectionStart: start, selectionEnd: end } = textField;
         if (!value.slice(start, end).trim()) throw new Error("Select the words to format in the text field.");
         replacement = [value.slice(0, start), value.slice(start, end), value.slice(end)]
@@ -491,8 +500,22 @@
     const selector = form.elements.format;
     selector.addEventListener("change", () => {
       const hasText = !["image", "table", "list"].includes(selector.value);
+      const isLink = selector.value === "link";
       $("#editTextField").hidden = !hasText;
       form.elements.text.required = hasText;
+      $("#editLinkUrlField").hidden = !isLink;
+      form.elements.url.disabled = !isLink;
+      form.elements.url.required = isLink;
+      const scope = form.elements.scope;
+      if (scope) {
+        if (isLink) {
+          scope.value = "single";
+          scope.dispatchEvent(new Event("change"));
+        }
+        scope.closest("fieldset").hidden = isLink;
+      }
+      const selection = form.querySelector('button[value="selection"]');
+      if (selection) selection.disabled = isLink || (scope && !["single", "text"].includes(scope.value));
     });
   }
 

@@ -2,6 +2,7 @@
 // tables, and images of the open (possibly edited) book remain authoritative.
 function statRestoreKey(block, assets) {
   if (!block) return "";
+  if (block.type === "link" || block.type === "paragraph" && parseStandaloneBookLink(block.text)) return restoreAnchorKey(block);
   if (block.type === "heading") return `heading:${restoreTextKey(block.text)}`;
   if (block.type === "paragraph") return `p:${restoreTextKey(block.text).replace(/:+/g, " ").replace(/\s+/g, " ").trim()}`;
   if (block.type === "image") return `image:${restoreUrlKey(block[markdownImage]?.url || block[imageSlotContext]?.url || assets.get(block.assetId)?.src)}`;

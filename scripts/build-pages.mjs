@@ -11,6 +11,20 @@ if (name !== "pdfjs-dist" || !/^\d+\.\d+\.\d+$/.test(version)) {
 }
 
 const maker = await readFile(join(root, "bookmaker.html"), "utf8");
+const reader = await readFile(join(root, "index.html"), "utf8");
+const versionSource = await readFile(join(root, "app-version.js"), "utf8");
+const appVersion = versionSource.match(/const CONTENT_LAB_VERSION = "(\d+\.\d+\.\d+)";/)?.[1];
+if (!appVersion) throw new Error("Missing Content Lab application version.");
+const run = /^\d+$/.test(process.env.GITHUB_RUN_NUMBER || "") ? process.env.GITHUB_RUN_NUMBER : "";
+const attempt = /^\d+$/.test(process.env.GITHUB_RUN_ATTEMPT || "") ? Number(process.env.GITHUB_RUN_ATTEMPT) : 1;
+const sha = /^[a-f\d]{7,40}$/i.test(process.env.GITHUB_SHA || "") ? process.env.GITHUB_SHA.slice(0, 7) : "";
+const buildLabel = `v${appVersion}${run ? `+${run}${attempt > 1 ? `.${attempt}` : ""}` : sha ? `+${sha}` : "-local"}`;
+const buildTitle = `Content Lab ${buildLabel}${sha ? ` (commit ${sha})` : ""}`;
+function stampVersion(html) {
+  const marker = /<span id="appVersion" class="brand-version">[^<]*<\/span>/;
+  if (!marker.test(html)) throw new Error("Missing application version badge.");
+  return html.replace(marker, `<span id="appVersion" class="brand-version" data-build-version title="${buildTitle}">${buildLabel}</span>`);
+}
 const pin = maker.match(/data-pdf-engine="https:\/\/cdn\.jsdelivr\.net\/npm\/pdfjs-dist@(\d+\.\d+\.\d+)\/"/);
 if (!pin) throw new Error("Bookmaker is missing its pinned PDF.js version.");
 const localTest = process.argv.includes("--local-test");
@@ -18,7 +32,7 @@ if (version !== pin[1] && !localTest) {
   throw new Error(`The release needs PDF.js ${pin[1]}. Found ${version}.`);
 }
 const files = [
-  "index.html", "styles.css", "reader.js", "app.js", "image-viewer.js",
+  "index.html", "styles.css", "reader.js", "app.js", "app-version.js", "image-viewer.js",
   "book-contents.js", "book-reprocessing.js", "book-restore.js", "book-stat-restore.js", "book-archive.js", "book-editing.js", "image-recovery.js", "pdf-import.js", "book-format.schema.json",
   "Test text/Euphoria Demo.txt", "books/euphoria-demo/conversion.json",
   "books/euphoria-demo/book.json", "books/euphoria-demo/book-fa.json",
@@ -53,6 +67,7 @@ for (const directory of ["cmaps", "standard_fonts", "iccs", "wasm"]) {
   await cp(join(pdfRoot, directory), join(pdfVendor, directory), { recursive: true });
 }
 await copyFile(join(pdfRoot, "LICENSE"), join(pdfVendor, "LICENSE"));
-await writeFile(join(dist, "bookmaker.html"), maker.replace(pin[0], `data-pdf-engine="./${vendorPath}/"`));
+await writeFile(join(dist, "bookmaker.html"), stampVersion(maker.replace(pin[0], `data-pdf-engine="./${vendorPath}/"`)));
+await writeFile(join(dist, "index.html"), stampVersion(reader));
 await writeFile(join(dist, ".nojekyll"), "");
-console.log(`Built dist with PDF.js ${version}${version === pin[1] ? "" : " (local test build)"}.`);
+console.log(`Built Content Lab ${buildLabel} with PDF.js ${version}${version === pin[1] ? "" : " (local test build)"}.`);

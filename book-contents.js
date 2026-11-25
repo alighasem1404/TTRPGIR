@@ -83,3 +83,9 @@ function statBlockText(value) {
     .replace(/[ \t]*::[ \t]*$/gm, "")
     .replace(/[ \t]+(?=\*\*(?:At Will|\d+\/(?:Day|Rest)(?: Each)?):\*\*)/gi, "\n");
 }
+
+function renderBookLink(block) {
+  const url = safeBookLinkUrl(block.url);
+  const text = inlineMarkdown(block.text, false);
+  return url ? `<p class="book-link-block"><a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${text}<span aria-hidden="true" class="book-link-arrow"> ↗</span></a></p>` : `<p class="book-link-block">${text}</p>`;
+}

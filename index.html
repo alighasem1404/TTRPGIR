@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Euphoria Demo · Content Reader</title>
     <meta name="description" content="A JSON-powered digital TTRPG book reader." />
-    <link rel="stylesheet" href="styles.css?v=29" />
+    <link rel="stylesheet" href="styles.css?v=31" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-mark" aria-label="Euphoria Content Lab">
           <span class="brand-glyph">✦</span>
-          <span><strong>EUPHORIA</strong><small>CONTENT LAB</small></span>
+          <span><strong>EUPHORIA</strong><small>CONTENT LAB <span id="appVersion" class="brand-version">v—</span></small></span>
         </div>
         <div class="topbar-center">
           <span class="eyebrow">BOOK READER</span>
@@ -99,10 +99,11 @@
 
       <div id="notice" class="notice" role="status" hidden></div>
     </div>
+    <script src="app-version.js?v=1"></script>
     <script src="image-viewer.js?v=2"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=4"></script>
-    <script src="book-contents.js?v=3"></script>
-    <script src="reader.js?v=19"></script>
+    <script src="book-contents.js?v=4"></script>
+    <script src="reader.js?v=20"></script>
   </body>
 </html>

@@ -1758,3 +1758,75 @@ Playlists
 
 ![cosmetic](https://cdn.midjourney.com/1dc9b35f-624f-423d-8535-18fffdf064e6/0_1.jpeg){width:114%,mix-blend-mode:multiply,position:absolute,left:-7%,top:50%}
 
+
+\page
+
+## Stat block example
+
+This example demonstrates how a complete monster stat block is displayed in the Book Maker and Reader.
+
+{{monster
+## Abelard “the Sévère” Alba
+---
+*Medium Humanoid (Human, Vistani), Unaligned*
+:
+**AC** :: 16 (shimmering githweave armor) {{bonus **Initiative** +0 (10)}}
+**HP** :: 104 (16d8 + 32)
+**Speed** :: 30 ft.
+
+{{column-count:2
+| | | Mod | Save |
+|:---|:--:|:--:|:--:|
+| STR | 11 | +0 | +0 |
+| DEX | 11 | +0 | +1 |
+| CON | 14 | +2 | +6 |
+
+| | | Mod | Save |
+|:---|:--:|:--:|:--:|
+| INT | 21 | +5 | +9 |
+| WIS | 21 | +5 | +10 |
+| CHA | 14 | +2 | +2 |
+}}
+:
+**Skills** :: Arcana +9 (+12 while holding his staff), Deception +6, Insight +9, Intimidation +8, Medicine +9, Perception +9, Religion +9
+**Resistances** :: Necrotic
+**Gear** :: Tarokka cards, Totemic Spear Longspear +3, Staff of the Magi +3, flame totem, githweave armor, eye amulet, skull mask, tactical bracers, piercing gloves, Feystep Lacings
+**Senses** :: passive Perception 19
+**Languages** :: Common, Elvish
+**CR** :: 10 (XP 5,900; PB +4)
+
+### Traits
+***Relic Wards.*** His armor sets his AC to 16 and grants +1 to Wisdom saves; his lacings grant +1 to Dexterity saves. His worn skull mask grants Necrotic Resistance and +2 to Intimidation. These benefits are included above. His eye amulet grants Advantage on saves against gaze, eye-originating, or sight-impairing effects.
+:
+***Spirit Companion.*** Abelard's conjured spirit occupies a space within 60 feet, blocking enemies but allowing allies through. It has AC 16 and cannot act independently. One attack dealing 20 or more damage dismisses it and deals 15 Psychic damage to Abelard; lesser attacks and other effects do not harm it. Halve ranged attack damage before applying that threshold. Once on his turn, he can move it up to 30 feet without an action. It disappears if dismissed, beyond range, or he has the Incapacitated condition.
+:
+***Twofold Curse.*** Once on each of his turns, when Abelard hits a cursed target with an attack, he deals an extra 7 (2d6) Psychic damage.
+
+### Actions
+***Multiattack.*** Abelard makes three Spirit Bolt attacks or two Totemic Spear attacks.
+:
+***Spirit Bolt.*** *Ranged Attack Roll:* +9, range 120 ft. *Hit:* 18 (3d8 + 5) Psychic or Fire damage (Abelard's choice). It originates from him or his manifested spirit. Measure range and cover from that origin; Abelard must see the target, with an unobstructed path from the origin.
+:
+***Totemic Spear.*** *Melee Attack Roll:* +12, reach 10 ft. *Hit:* 13 (1d10 + 8) Piercing damage. The two-handed spear uses Intelligence and includes its +3 magic bonus.
+:
+***Cast Fortune (1/Day).*** After a 1-minute reading for one willing creature within 30 feet, Abelard records three d20 rolls. In order, these replace the target's next three attack rolls, saving throws, or skill checks in dangerous or stressful circumstances before its next Long Rest. Apply normal modifiers. A creature can receive only one such reading per Long Rest. Abelard need not reveal the results.
+:
+***Spellcasting.*** Abelard casts the following spells, using Intelligence (spell save DC 17, +9 to hit with spell attacks), except Augury and Divination use Wisdom. Normal components, casting times, and Concentration apply.
+**At Will:** *Mage Hand, Minor Illusion, Prestidigitation*
+**2/Day Each:** *Dispel Magic, Fear, Hypnotic Pattern, Suggestion, Witch Bolt*
+**1/Day Each:** *Arcane Eye, Augury, Divination, Dominate Monster, Polymorph, Sleep*
+
+### Bonus Actions
+***Call Spirit.*** Abelard manifests or relocates his spirit in an unoccupied space he can see within 30 feet.
+:
+***Curse.*** Abelard curses up to two creatures he can see within 60 feet for 1 minute. He maintains at most two curses, choosing which ends if necessary. They end if he dies or has the Incapacitated condition.
+:
+***Healing Spirit (3/Day).*** One creature Abelard can see within 5 feet of his manifested spirit regains 18 (3d8 + 5) Hit Points.
+:
+***Evil Eye (3/Day).*** One creature within 60 feet that can see his eyes makes a DC 17 Wisdom saving throw. On a failure, it cannot willingly approach him, and his attacks against it have Advantage until the end of his next turn.
+:
+***Feystep Lacings.*** Spend 1–5 charges to teleport up to 5 feet per charge to a visible unoccupied space. The lacings regain all five charges at dawn.
+
+### Reactions
+***Arcane Chastisement (3/Day).*** When a creature he can see within 60 feet damages him or an ally, it makes a DC 17 Wisdom saving throw. *Failure:* 18 (3d8 + 5) Psychic damage, and it cannot attack the damaged creature until the end of its next turn. *Success:* Half damage only.
+}}
