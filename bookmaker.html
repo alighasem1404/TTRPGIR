@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=24" />
+    <link rel="stylesheet" href="styles.css?v=25" />
   </head>
   <body>
     <div class="app-shell maker-page">
@@ -49,6 +49,7 @@
               <div class="maker-step"><b>03</b><span>Export to reader</span></div>
             </div>
             <div class="heading-actions">
+              <button id="reprocessBook" type="button" disabled>Reprocess book</button>
               <button id="openHeadings" type="button" disabled>Edit headings</button>
               <button id="undoHeadings" type="button" disabled>Undo heading edit</button>
             </div>
@@ -129,6 +130,19 @@
           <div class="support-card muted-card"><span class="support-icon">→</span><div><strong>Next step</strong><p>Open the exported package in index.html to test the independent reader.</p></div></div>
         </aside>
       </main>
+      <dialog id="bookReprocess" aria-labelledby="reprocessTitle">
+        <div class="heading-dialog-header">
+          <h2 id="reprocessTitle">Reprocess book</h2>
+        </div>
+        <p>Check the loaded book against the latest conversion rules without reimporting its Markdown.</p>
+        <p id="reprocessSummary" role="status"></p>
+        <ul id="reprocessResults" class="reprocess-results"></ul>
+        <p class="heading-hint">Existing content, edits, images, and palette are retained. Your original file is not overwritten; export the updated book after applying.</p>
+        <div class="heading-dialog-actions">
+          <form method="dialog"><button type="submit">Close</button></form>
+          <button id="applyReprocess" type="button" disabled>Apply updates</button>
+        </div>
+      </dialog>
       <dialog id="headingEditor" aria-labelledby="headingEditorTitle">
         <div class="heading-dialog-header">
           <h2 id="headingEditorTitle">Edit headings</h2>
@@ -287,7 +301,8 @@
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=4"></script>
     <script src="book-contents.js?v=1"></script>
-    <script src="app.js?v=27"></script>
+    <script src="app.js?v=28"></script>
+    <script src="book-reprocessing.js?v=1"></script>
     <script src="book-editing.js?v=11"></script>
     <script src="pdf-import.js?v=7" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
     <script src="image-recovery.js?v=7"></script>

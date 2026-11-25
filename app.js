@@ -44,6 +44,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#bookZipExport").addEventListener("close", (event) => {
     if (!event.target.open) zipExport = null;
   });
+  $("#reprocessBook").addEventListener("click", openBookReprocess);
+  $("#applyReprocess").addEventListener("click", applyBookReprocess);
+  $("#bookReprocess").addEventListener("close", (event) => { if (!event.target.open) reprocessDraft = null; });
   $("#openHeadings").addEventListener("click", openHeadingEditor);
   $("#undoHeadings").addEventListener("click", undoHeadingEdit);
   $("#headingSearch").addEventListener("input", filterHeadingRows);
@@ -141,7 +144,8 @@ function loadDocument(source, fileName, config = {}) {
 }
 
 function loadPackage(bookPackage, fileName, source = "", config = {}, images = new Map()) {
-  normalizeBookText(bookPackage);
+  let normalizedBreakFields = 0;
+  normalizeBookText(bookPackage, () => { normalizedBreakFields += 1; });
   const bundledImages = new Map();
   try {
     for (const [path, blob] of images) bundledImages.set(path, { blob, url: URL.createObjectURL(blob) });
@@ -151,6 +155,9 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
   }
   const previousImages = state.bundledImages;
   if ($("#headingEditor").open) $("#headingEditor").close();
+  if ($("#bookReprocess").open) $("#bookReprocess").close();
+  reprocessDraft = null;
+  state.normalizedBreakFieldsOnLoad = normalizedBreakFields;
   if ($("#bookZipExport").open) $("#bookZipExport").close();
   window.bookmakerPdf?.setBookAvailable(Boolean(bookPackage));
   for (const image of state.recoveredImages.values()) URL.revokeObjectURL(image.url);
@@ -179,6 +186,7 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
   $(".reader-stage").scrollTo({ top: 0, left: 0 });
   setStatus(`Loaded ${fileName}`);
   $("#exportButton").disabled = false;
+  $("#reprocessBook").disabled = false;
   updateExportLabel();
   for (const image of previousImages.values()) URL.revokeObjectURL(image.url);
 }
@@ -412,9 +420,9 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
   return entries;
 }
 
-function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacementHistory = false } = {}) {
+function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacementHistory = false, currentEntryId = state.entries[state.currentPage]?.id } = {}) {
   if (!keepReplacementHistory) window.bookEditing?.clearReplacementHistory();
-  const currentId = state.entries[state.currentPage]?.id;
+  const currentId = currentEntryId;
   if (!state.visualEdits || !keepHeadingHistory) state.headingHistory.length = 0;
   state.visualEdits = true;
   state.entries = entries.map((entry, order) => ({ ...entry, order }));
@@ -1215,8 +1223,13 @@ function showNotice(message) { const notice = $("#notice"); notice.textContent =
 function stripMarkup(value) { return unwrapHomebreweryText(value).replace(/[*_`]/g, "").trim(); }
 function slugify(value) { return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 function normalizeBreaks(value) { return String(value).replace(/[ \t]*<br[ \t]*\/?[ \t]*>[ \t]*/gi, "\n").replace(/\r\n?/g, "\n"); }
-function normalizeBookText(bookPackage) {
-  const field = (object, key) => { if (typeof object[key] === "string") object[key] = normalizeBreaks(object[key]); };
+function normalizeBookText(bookPackage, onChange = () => {}) {
+  const normalize = (value) => {
+    const converted = normalizeBreaks(value);
+    if (converted !== value) onChange();
+    return converted;
+  };
+  const field = (object, key) => { if (typeof object[key] === "string") object[key] = normalize(object[key]); };
   field(bookPackage.book, "title");
   field(bookPackage.book, "description");
   for (const asset of bookPackage.assets) field(asset, "alt");
@@ -1224,10 +1237,10 @@ function normalizeBookText(bookPackage) {
     field(entry, "title");
     for (const block of entry.blocks) {
       for (const key of ["text", "title", "caption", "alt"]) field(block, key);
-      if (block.type === "list") block.items = block.items.map(normalizeBreaks);
+      if (block.type === "list") block.items = block.items.map(normalize);
       if (block.type === "table") {
-        block.columns = block.columns.map(normalizeBreaks);
-        block.rows = block.rows.map((row) => row.map(normalizeBreaks));
+        block.columns = block.columns.map(normalize);
+        block.rows = block.rows.map((row) => row.map(normalize));
       }
     }
   }

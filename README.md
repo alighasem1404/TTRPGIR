@@ -2,6 +2,14 @@
 
 Open Bookmaker to import Markdown, edit headings, and attach a matching PDF to recover missing artwork. The Reader opens both Bookmaker ZIPs and standalone Book JSON files. See [Book JSON and ZIP format](BOOK_FORMAT.md) for the package layout.
 
+## Update an older book
+
+1. Open its JSON or ZIP in Bookmaker.
+2. Select **Reprocess book** in the workflow panel and review the available updates.
+3. Select **Apply updates**, then export a new JSON or ZIP. If the book is already current, no changes are needed.
+
+Reprocessing works on the loaded package, so existing text edits, chapter order, image assets, and the chosen palette are retained. The original file is not overwritten.
+
 ## GitHub Pages
 
 In the repository’s **Settings → Pages**, select **GitHub Actions** as the publishing source. The [Pages workflow](.github/workflows/pages.yml) builds and tests the site, publishes it on pushes to `main`, and verifies it at the resulting Pages URL. The Reader is the home page and links to `bookmaker.html`.

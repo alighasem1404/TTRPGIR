@@ -48,12 +48,12 @@ button { cursor: pointer; }
 .heading-actions, .heading-dialog-actions, .heading-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .heading-actions { margin-top: 10px; }
 .heading-actions button, #headingEditor button, #headingEditor input:not([type="checkbox"]), #headingEditor select,
-#pdfInspector button, #pdfInspector input, #imageRecovery button, #imageRecovery input, #imageRecovery select, #bookZipExport button {
+#pdfInspector button, #pdfInspector input, #imageRecovery button, #imageRecovery input, #imageRecovery select, #bookZipExport button, #bookReprocess button {
   min-height: 36px; padding: 6px 9px; border: 1px solid var(--gold-dark); border-radius: 4px;
   color: var(--ink); background: var(--parchment-light); font: inherit;
 }
 .heading-actions button { font-size: 12px; }
-.heading-actions button:disabled, #headingEditor button:disabled, #pdfInspector button:disabled, #imageRecovery button:disabled, #bookZipExport button:disabled { opacity: .55; cursor: default; }
+.heading-actions button:disabled, #headingEditor button:disabled, #pdfInspector button:disabled, #imageRecovery button:disabled, #bookZipExport button:disabled, #bookReprocess button:disabled { opacity: .55; cursor: default; }
 #headingEditor {
   width: min(1200px, calc(100% - 24px)); max-height: calc(100% - 24px);
   padding: clamp(12px, 4vw, 24px); border: 1px solid var(--gold-dark); border-radius: 8px;
@@ -84,11 +84,11 @@ button { cursor: pointer; }
 #headingEditor #previewHeadings, #headingEditor #applyHeadings { color: #fff3db; background: var(--wine-dark); }
 .maker-panel .pdf-status { margin-top: 8px; overflow-wrap: anywhere; }
 .pdf-status:empty { display: none; }
-#pdfInspector, #imageRecovery, #bookZipExport {
+#pdfInspector, #imageRecovery, #bookZipExport, #bookReprocess {
   width: min(950px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: clamp(12px, 4vw, 24px);
   border: 1px solid var(--gold-dark); border-radius: 8px; color: var(--ink); background: var(--parchment); font-size: 14px;
 }
-#pdfInspector::backdrop, #imageRecovery::backdrop, #bookZipExport::backdrop { background: rgba(26, 14, 19, .75); }
+#pdfInspector::backdrop, #imageRecovery::backdrop, #bookZipExport::backdrop, #bookReprocess::backdrop { background: rgba(26, 14, 19, .75); }
 .pdf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 .pdf-toolbar h2 { flex: 1; margin: 0; color: var(--wine-dark); font: 24px Georgia, serif; }
 #pdfPageNumber { width: 70px; }
@@ -140,6 +140,12 @@ button { cursor: pointer; }
 #recoveryForm .pdf-toolbar { margin: 6px 0 0; }
 #applyRecovery { color: #fff3db; background: var(--wine-dark); }
 #bookZipExport { width: min(450px, calc(100% - 24px)); }
+#bookReprocess { width: min(520px, calc(100% - 24px)); overflow: auto; }
+#reprocessSummary { color: var(--wine-dark); font-weight: 700; }
+.reprocess-results { margin: 12px 0; padding: 0; list-style: none; }
+.reprocess-results li { margin-block: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--parchment-light); }
+.reprocess-results p { margin: 5px 0 0; }
+#applyReprocess:not(:disabled) { color: #fff3db; background: var(--wine-dark); }
 #bookZipExport h2 { margin: 0; color: var(--wine-dark); font: 24px Georgia, serif; }
 #bookZipExportStatus { overflow-wrap: anywhere; }
 .edition-field { display: grid; gap: 4px; margin: 8px 0; color: var(--ink); font-size: 12px; }

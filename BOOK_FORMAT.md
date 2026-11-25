@@ -43,6 +43,14 @@ These rules apply to every book unless a future format version changes them:
 
 9. Explicit HTML line breaks (`<br>`, `<br/>`, `<br />`) become newline characters (`\n`) in text fields. Both the Maker and Reader display these as line breaks.
 
+## Manual reprocessing
+
+Book Maker can run the latest package-level conversion rules on a loaded JSON or ZIP using **Reprocess book**. The dialog previews each rule and the entry count before applying changes. The initial rules normalize legacy HTML break tags in text fields and relocate H1 part headings (and their introductory content) to the next entry, merging redundant part-only entries without discarding their blocks. Existing line breaks normalized automatically on opening are reported as well.
+
+New package upgrades should be registered in `BOOK_REPROCESS_RULES` in `book-reprocessing.js`. Each rule operates on a staged package, reports whether it made changes, and must be safe to run repeatedly. Preserve existing content, the order of blocks, surviving entry IDs, asset references, and Maker-only editing metadata. Reprocessing does not require a schema-version change just to apply newer conversion rules.
+
+Only data still present in the package can be reprocessed. Content discarded by an older Markdown import cannot be reconstructed without the original source.
+
 ## Versioning rules
 
 - Increase `schemaVersion` when the package shape changes. The current package format is version 1.

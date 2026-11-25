@@ -1006,6 +1006,121 @@ async function smokePartsAndBreaks(browser, width) {
   }));
   assert.deepEqual(legacy.rows, expected);
   assert.equal(legacy.count, "3/3");
+
+  // The manual upgrade uses stored book content, not a reconstructed Markdown source.
+  result.book.entries[0].blocks.push({ type: "paragraph", text: "Part One introduction<br>More text." });
+  result.book.entries[2].blocks.push({ type: "paragraph", text: "Part Two introduction." });
+  const planned = await maker.evaluate((book) => {
+    const before = JSON.stringify(book);
+    const plan = planBookReprocessing(book, 2);
+    return { results: plan.results, unchanged: before === JSON.stringify(book),
+      ids: plan.book.entries.map(({ id }) => id), repeated: planBookReprocessing(plan.book, 2).changed };
+  }, result.book);
+  assert.ok(planned.unchanged);
+  assert.ok(planned.results.every((result) => result.changed));
+  assert.deepEqual(planned.ids, result.book.entries.slice(1).map(({ id }) => id));
+  assert.equal(planned.repeated, false);
+
+  await maker.upload("jsonInput", "legacy-reprocess.json", JSON.stringify(result.book));
+  await maker.until(() => state.entries[0]?.id === "legacy-preamble", "Legacy JSON available for manual reprocessing");
+  const staged = await maker.evaluate(() => {
+    const before = JSON.stringify(state.bookPackage);
+    document.getElementById("reprocessBook").click();
+    const preview = {
+      summary: document.getElementById("reprocessSummary").textContent,
+      rules: document.getElementById("reprocessResults").textContent,
+      enable: !document.getElementById("applyReprocess").disabled
+    };
+    document.getElementById("bookReprocess").close();
+    return { ...preview, unchanged: before === JSON.stringify(state.bookPackage) };
+  });
+  assert.ok(staged.enable && staged.unchanged);
+  assert.match(staged.summary, /4.*3/);
+  assert.match(staged.rules, /normalized when this book was opened/);
+  const reprocessed = await maker.evaluate(() => {
+    const before = state.bookPackage;
+    const blocks = JSON.stringify(before.entries.flatMap((entry) => entry.blocks));
+    const palette = JSON.stringify(before.theme);
+    document.getElementById("reprocessBook").click();
+    document.getElementById("applyReprocess").click();
+    return {
+      ids: state.entries.map(({ id }) => id), orders: state.entries.map(({ order }) => order),
+      first: state.entries.map((entry) => entry.blocks[0]?.text),
+      blocksPreserved: blocks === JSON.stringify(state.entries.flatMap((entry) => entry.blocks)),
+      palettePreserved: palette === JSON.stringify(state.bookPackage.theme),
+      selected: state.entries[state.currentPage]?.id, closed: !document.getElementById("bookReprocess").open,
+      book: window.bookEditing.exportPackage()
+    };
+  });
+  assert.deepEqual(reprocessed.ids, planned.ids);
+  assert.deepEqual(reprocessed.orders, [0, 1, 2]);
+  assert.deepEqual(reprocessed.first, ["Part One", "Beta", "Part Two"]);
+  assert.ok(reprocessed.blocksPreserved && reprocessed.palettePreserved && reprocessed.closed);
+  assert.equal(reprocessed.selected, planned.ids[0]);
+  assert.equal(reprocessed.book.entries[0].blocks[1].text, "Part One introduction\nMore text.");
+  assert.equal(await maker.evaluate(() => {
+    document.getElementById("reprocessBook").click();
+    const current = document.getElementById("applyReprocess").disabled;
+    document.getElementById("bookReprocess").close();
+    return current;
+  }), true);
+
+  // A legacy ZIP with art inside a moved part must retain its original bytes,
+  // including any image recovered within the current Maker session.
+  const zipFixture = await maker.evaluate(async (book) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 6;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#bc8c37";
+    ctx.fillRect(0, 0, 6, 6);
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    const image = { id: "part-art", src: "images/part-art.png", alt: "Bundled part art", role: "illustration" };
+    const recovery = { id: "part-recovery", src: "missing-part-art.png", alt: "Replacement part art", role: "illustration" };
+    book.assets.push(image, recovery);
+    book.entries[2].blocks.push(...[image, recovery].map(({ id }) => ({ type: "image", assetId: id, role: "illustration", placement: "inline" })));
+    const zip = new JSZip();
+    zip.file("book.json", JSON.stringify(book));
+    zip.file(image.src, await png.arrayBuffer());
+    return { bytes: [...await zip.generateAsync({ type: "uint8array" })], png: [...new Uint8Array(await png.arrayBuffer())] };
+  }, result.book);
+  await maker.upload("jsonInput", "legacy-reprocess.zip", zipFixture.bytes);
+  await maker.until(() => state.entries[0]?.id === "legacy-preamble" && state.bundledImages.has("images/part-art.png"), "Legacy ZIP ready to reprocess");
+  const imageState = await maker.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 6;
+    const slot = state.imageSlots.find((slot) => slot.alt === "Replacement part art");
+    updateImageRecovery(slot, { blob: await window.bookArchive.encodeWebp(canvas), fileName: "recovered-part.webp", caption: "Recovered part art" });
+    const bundled = state.bundledImages.get("images/part-art.png");
+    const recovered = state.recoveredImages.get(slot.key);
+    document.getElementById("reprocessBook").click();
+    document.getElementById("applyReprocess").click();
+    const moved = state.entries[2].blocks.filter((block) => block.type === "image");
+    return {
+      moved: moved.map((block) => block.assetId),
+      bundled: state.bundledImages.get("images/part-art.png") === bundled,
+      recovered: state.previewImages.get(moved[1]) === recovered,
+      exportLabel: document.getElementById("exportButton").textContent
+    };
+  });
+  assert.deepEqual(imageState.moved, ["part-art", "part-recovery"]);
+  assert.ok(imageState.bundled && imageState.recovered);
+  assert.equal(imageState.exportLabel, "Export Book ZIP");
+  await maker.evaluate(() => document.getElementById("exportButton").click());
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Reprocessed ZIP download ready");
+  const updatedZip = await maker.evaluate(async () => {
+    const { bookPackage, images } = await window.bookArchive.open(zipExport.blob, validateBookPackage, new AbortController().signal);
+    const png = [...new Uint8Array(await images.get("images/part-art.png").arrayBuffer())];
+    const bytes = [...new Uint8Array(await zipExport.blob.arrayBuffer())];
+    document.getElementById("bookZipExport").close();
+    return { ids: bookPackage.entries.map(({ id }) => id), files: [...images.keys()], png, bytes };
+  });
+  assert.deepEqual(updatedZip.ids, planned.ids);
+  assert.ok(updatedZip.files.includes("images/recovered-part.webp"));
+  assert.deepEqual(updatedZip.png, zipFixture.png);
+  await reader.upload("jsonInput", "updated-parts.zip", updatedZip.bytes);
+  await reader.until(() => readerState.entries[0]?.title === "Alpha" && readerState.entries.length === 3, "Reader opens reprocessed ZIP");
+  const finalRows = await reader.evaluate(() => [...document.getElementById("contents").children].map((row) => row.querySelector(".page-title")?.textContent));
+  assert.deepEqual(finalRows, expected);
 }
 
 async function smokeHeadingGroupOrdering(browser, width) {
