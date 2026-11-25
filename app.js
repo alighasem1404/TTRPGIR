@@ -141,6 +141,7 @@ function loadDocument(source, fileName, config = {}) {
 }
 
 function loadPackage(bookPackage, fileName, source = "", config = {}, images = new Map()) {
+  normalizeBookText(bookPackage);
   const bundledImages = new Map();
   try {
     for (const [path, blob] of images) bundledImages.set(path, { blob, url: URL.createObjectURL(blob) });
@@ -203,7 +204,7 @@ function openHeadingEditor() {
       const description = `${count} occurrence${count === 1 ? "" : "s"}`;
       return `<li class="heading-row" data-group="${index}">
         <input type="checkbox" aria-label="Select H${level} ${name}" />
-        <input type="text" dir="auto" aria-label="Title for H${level} ${name}" aria-describedby="heading-count-${index}" value="${name}" title="${name}" />
+        ${group.original.title.includes("\n") ? `<textarea rows="2" dir="auto" aria-label="Title for H${level} ${name}" aria-describedby="heading-count-${index}" title="${name}">${name}</textarea>` : `<input type="text" dir="auto" aria-label="Title for H${level} ${name}" aria-describedby="heading-count-${index}" value="${name}" title="${name}" />`}
         <span class="heading-count" id="heading-count-${index}" aria-label="${description}" title="${description}">${count}</span>
         <select aria-label="Level for H${level} ${name}">${options}</select>
       </li>`;
@@ -226,7 +227,7 @@ function openHeadingEditor() {
     Object.assign(group, { row, selected, title, level });
   }
   headingDraft = { headings, groups, columnSections, preview: null };
-  $("#headingEntryHint").textContent = `H${entryHeadingLevel(state.config)} headings start new entries. Bulk shifts stop at H1 and H6.`;
+  $("#headingEntryHint").textContent = `H${entryHeadingLevel(state.config)} headings start new entries. H1 headings label book parts. Bulk shifts stop at H1 and H6.`;
   $("#headingSearch").value = "";
   $("#headingMessage").textContent = "";
   showHeadingPreview(false);
@@ -261,7 +262,7 @@ function updateHeadingControls() {
   $("#headingSelection").textContent = `${selected.length} selected · ${occurrences} heading${occurrences === 1 ? "" : "s"}`;
   $("#updateSelectedHeadings").disabled = !selected.length;
   $("#previewHeadings").disabled = !groups.some(({ title, level, original }) =>
-    title.value.trim() !== original.title || Number(level.value) !== original.level);
+    title.value !== original.title && title.value.trim() !== original.title || Number(level.value) !== original.level);
 }
 
 function selectVisibleHeadings() {
@@ -295,7 +296,8 @@ function previewHeadingChanges() {
 
   const edits = [];
   for (const group of groups) {
-    const edit = { title: group.title.value.trim(), level: Number(group.level.value) };
+    const value = group.title.value === group.original.title ? group.original.title : group.title.value.trim();
+    const edit = { title: state.visualEdits ? normalizeBreaks(value) : value, level: Number(group.level.value) };
     for (const index of group.indices) edits[index] = edit;
   }
   if (state.visualEdits) {
@@ -325,7 +327,9 @@ function renderHeadingPreview(preview) {
   headingDraft.preview = preview;
   const { entries, count } = preview;
   $("#headingPreviewSummary").textContent = `${count} heading changes. Entries before and after: ${state.entries.length} → ${entries.length}.`;
-  $("#headingPreviewContents").innerHTML = entries.map((entry) => {
+  $("#headingPreviewContents").innerHTML = bookContentsRows(entries).map((row) => {
+    if (row.type === "part") return '<li class="heading-preview-part">H1 · ' + escapeHtml(row.title) + "</li>";
+    const { entry } = row;
     const sections = entry.blocks.filter((block) => block.type === "heading" && block.level === 3);
     const list = sections.map((block) => `<li>${escapeHtml(block.text)}</li>`).join("");
     return `<li><strong>${escapeHtml(entry.title)}</strong>${list ? `<ul>${list}</ul>` : ""}</li>`;
@@ -365,28 +369,45 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
   const entries = [];
   const level = entryHeadingLevel(state.config);
   const ids = new Set(currentEntries.map(({ id }) => id));
+  function startEntry(title) {
+    const base = slugify(title) || "entry";
+    let id = base;
+    for (let suffix = 2; ids.has(id); suffix += 1) id = `${base}-${suffix}`;
+    ids.add(id);
+    entries.push({ id, title, blocks: [] });
+  }
+  let firstDemotedToPart = false;
   for (const entry of currentEntries) {
-    const lead = entry.blocks[0];
+    const leadIndex = Math.max(0, entryHeadingIndex(entry.blocks, level));
+    const lead = entry.blocks[leadIndex];
     const change = changes.get(lead);
     const leadChange = lead?.type === "heading" && (lead.level === level || change?.level === level) && change;
-    if (!leadChange || leadChange.level === level || !entries.length) {
-      entries.push({ ...entry, title: leadChange?.title || entry.title, blocks: [] });
-    } else {
-      const current = entries.at(-1);
-      current[sourceArtifact] = [...(current[sourceArtifact] || []), ...(entry[sourceArtifact] || [])];
+    const prefixPromotion = entry.blocks.findIndex((block, index) => index < leadIndex && changes.get(block)?.level === level);
+    function startOriginalEntry() {
+      if (!leadChange || leadChange.level === level || !entries.length) {
+        const demotedToPart = leadChange?.level === 1 && level > 1;
+        if (demotedToPart && !entries.length) firstDemotedToPart = true;
+        entries.push({ ...entry, title: demotedToPart ? "Welcome" : leadChange?.title || entry.title, blocks: [] });
+      } else {
+        const current = entries.at(-1);
+        current[sourceArtifact] = [...(current[sourceArtifact] || []), ...(entry[sourceArtifact] || [])];
+      }
     }
+    if (prefixPromotion >= 0) startEntry(changes.get(entry.blocks[prefixPromotion]).title);
+    else startOriginalEntry();
     for (const [index, original] of entry.blocks.entries()) {
       const edit = changes.get(original);
       const block = edit ? edit.block || { ...original, level: edit.level, text: stripMarkup(edit.title) } : original;
-      if (index > 0 && edit?.level === level && original.level !== level) {
-        const base = slugify(edit.title) || "entry";
-        let id = base;
-        for (let suffix = 2; ids.has(id); suffix += 1) id = `${base}-${suffix}`;
-        ids.add(id);
-        entries.push({ id, title: edit.title, blocks: [] });
-      }
+      if (prefixPromotion >= 0 && index === leadIndex) startOriginalEntry();
+      else if (index !== leadIndex && index !== prefixPromotion && edit?.level === level && original.level !== level) startEntry(edit.title);
       entries.at(-1).blocks.push(block);
     }
+  }
+  if (firstDemotedToPart && entries.length > 1) {
+    const intro = entries.shift();
+    const next = entries[0];
+    next.blocks = [...intro.blocks, ...next.blocks];
+    next[sourceArtifact] = [...(intro[sourceArtifact] || []), ...(next[sourceArtifact] || [])];
   }
   return entries;
 }
@@ -398,6 +419,7 @@ function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacemen
   state.visualEdits = true;
   state.entries = entries.map((entry, order) => ({ ...entry, order }));
   state.bookPackage.entries = state.entries;
+  normalizeBookText(state.bookPackage);
   const index = state.entries.findIndex(({ id }) => id === currentId);
   state.currentPage = index < 0 ? Math.max(0, Math.min(state.currentPage, state.entries.length - 1)) : index;
   refreshEditedImageSlots();
@@ -480,9 +502,23 @@ function entryHeadingLevel(config) {
   return config.rules?.entryHeadingLevel || config.entryHeadingLevel || 2;
 }
 
+function entryHeadingIndex(blocks, level = 2) {
+  return blocks.findIndex((block) => block.type === "heading" && block.level === level);
+}
+
 function buildEntries(body, config = {}) {
   const withoutPageBreaks = body.replace(/\\page\b/g, "\n");
-  const headingMatches = findMarkdownHeadings(withoutPageBreaks).filter((heading) => heading.level === entryHeadingLevel(config));
+  const level = entryHeadingLevel(config);
+  const headingMatches = [];
+  let partStart;
+  for (const heading of findMarkdownHeadings(withoutPageBreaks)) {
+    if (heading.level === level) {
+      headingMatches.push({ index: partStart ?? heading.index });
+      partStart = undefined;
+    } else if (heading.level === 1 && level > 1) {
+      partStart ??= heading.index;
+    }
+  }
   if (!headingMatches.length) return [createEntry(withoutPageBreaks, 0, config)];
   const entries = [];
   const preamble = withoutPageBreaks.slice(0, headingMatches[0].index).trim();
@@ -498,8 +534,8 @@ function buildEntries(body, config = {}) {
 function createEntry(raw, index, config = {}) {
   const normalized = cleanSource(applyConversionRules(raw, config));
   const headings = findMarkdownHeadings(normalized);
-  const firstHeading = headings.find((heading) => heading.level <= 3);
-  const entryHeading = headings[0]?.level === entryHeadingLevel(config) ? headings[0] : firstHeading;
+  const firstHeading = headings.find((heading) => heading.level > 1 && heading.level <= 3);
+  const entryHeading = headings.find((heading) => heading.level === entryHeadingLevel(config)) || firstHeading;
   const imageAlt = normalized.match(/!\[([^\]]+)\]/)?.[1];
   let title = entryHeading ? stripMarkup(entryHeading.title) : "";
   if (!title) title = index === 0 ? "Cover" : index === 1 ? "Inside cover" : imageAlt || `Entry ${index + 1}`;
@@ -514,7 +550,7 @@ function buildBookPackage(source, fileName, parsed, config = {}) {
       [sourceArtifact]: collectSourceArtifacts(entry.raw, blocks, config) };
   });
   const metadata = parsed.metadata;
-  return {
+  return normalizeBookText({
     format: "ttrpg-book",
     schemaVersion: 1,
     book: { id: slugify(metadata.title) || "untitled-book", title: metadata.title, description: metadata.description || "Imported Homebrewery Markdown book.", version: "0.1.0", tags: ["homebrewery-import"] },
@@ -523,7 +559,7 @@ function buildBookPackage(source, fileName, parsed, config = {}) {
     theme: themeFromCss(parsed.css),
     assets: [...assets.values()],
     entries
-  };
+  });
 }
 
 function defaultTheme() {
@@ -595,7 +631,7 @@ function markdownToBlocks(source, config, assets) {
       continue;
     }
     if (/^---+$/.test(line)) { blocks.push({ type: "divider", style: "rule" }); index += 1; continue; }
-    if (/^<[^>]+>/.test(line)) { index += 1; continue; }
+    if (/^<[^>]+>/.test(line) && !/^<br[ \t]*\/?[ \t]*>/i.test(line)) { index += 1; continue; }
     const paragraph = [line];
     index += 1;
     while (index < lines.length && lines[index].trim() && !isStructuralLine(lines[index].trim())) paragraph.push(lines[index++].trim());
@@ -753,7 +789,7 @@ function updateImageRecovery(slot, image) {
   const block = state.entries[slot.entryIndex].blocks[slot.blockIndex];
   const previous = state.recoveredImages.get(slot.key);
   if (image) {
-    const recovery = { ...image, url: URL.createObjectURL(image.blob) };
+    const recovery = { ...image, caption: normalizeBreaks(image.caption ?? ""), url: URL.createObjectURL(image.blob) };
     state.recoveredImages.set(slot.key, recovery);
     state.previewImages.set(block, recovery);
   } else {
@@ -900,20 +936,7 @@ function renderPackageBlock(block, assets, entryIndex, blockIndex) {
 }
 
 function renderContents() {
-  const contents = $("#contents");
-  const filtered = state.entries.map((entry, index) => ({ entry, index })).filter(({ entry }) => !state.search || `${entry.title} ${JSON.stringify(entry.blocks)}`.toLowerCase().includes(state.search));
-  contents.innerHTML = filtered.map(({ entry, index }) => {
-    const active = index === state.currentPage;
-    const subsections = active ? entry.blocks.map((block, blockIndex) => ({ block, blockIndex })).filter(({ block }) => block.type === "heading" && Number(block.level) === 3) : [];
-    const subitems = subsections.length ? `<div class="contents-subtree" role="group" aria-label="${escapeAttribute(entry.title)} sections">${subsections.map(({ block, blockIndex }) => `<a class="contents-subitem" data-section="entry-${index}-section-${blockIndex}" href="#entry-${index}-section-${blockIndex}"><span class="page-no">H3</span><span class="page-title">${inlineMarkdown(block.text)}</span></a>`).join("")}</div>` : "";
-    return `<div class="contents-entry"><button type="button" class="${active ? "active" : ""}"${active ? ' aria-current="page"' : ""} data-page="${index}"><span class="page-no">H2</span><span class="page-title">${escapeHtml(entry.title)}</span></button>${subitems}</div>`;
-  }).join("") || '<p class="empty-search">No matching entries.</p>';
-  contents.querySelectorAll("button[data-page]").forEach((button) => button.addEventListener("click", () => goToPage(Number(button.dataset.page))));
-  contents.querySelectorAll("a[data-section]").forEach((link) => link.addEventListener("click", (event) => {
-    event.preventDefault();
-    document.getElementById(link.dataset.section)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }));
-  $("#contentsCount").textContent = `${filtered.length}/${state.entries.length}`;
+  renderBookContents(state.entries, state.currentPage, state.search, "data-page", goToPage, (block) => !block[sourceHidden]);
 }
 
 function renderPage() {
@@ -1191,6 +1214,25 @@ function setStatus(message) { $("#sourceStatus").innerHTML = `<i></i> ${escapeHt
 function showNotice(message) { const notice = $("#notice"); notice.textContent = message; notice.hidden = false; setTimeout(() => { notice.hidden = true; }, 8000); }
 function stripMarkup(value) { return unwrapHomebreweryText(value).replace(/[*_`]/g, "").trim(); }
 function slugify(value) { return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
-function inlineMarkdown(value) { let html = escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>'); }
+function normalizeBreaks(value) { return String(value).replace(/[ \t]*<br[ \t]*\/?[ \t]*>[ \t]*/gi, "\n").replace(/\r\n?/g, "\n"); }
+function normalizeBookText(bookPackage) {
+  const field = (object, key) => { if (typeof object[key] === "string") object[key] = normalizeBreaks(object[key]); };
+  field(bookPackage.book, "title");
+  field(bookPackage.book, "description");
+  for (const asset of bookPackage.assets) field(asset, "alt");
+  for (const entry of bookPackage.entries) {
+    field(entry, "title");
+    for (const block of entry.blocks) {
+      for (const key of ["text", "title", "caption", "alt"]) field(block, key);
+      if (block.type === "list") block.items = block.items.map(normalizeBreaks);
+      if (block.type === "table") {
+        block.columns = block.columns.map(normalizeBreaks);
+        block.rows = block.rows.map((row) => row.map(normalizeBreaks));
+      }
+    }
+  }
+  return bookPackage;
+}
+function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function escapeAttribute(value) { return escapeHtml(value); }

@@ -75,10 +75,11 @@ button { cursor: pointer; }
 .heading-column h3 { margin: 0 0 4px; color: var(--wine-dark); font-size: 14px; }
 .heading-rows { max-height: 38vh; overflow-y: auto; margin: 0; padding: 2px; list-style: none; }
 .heading-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 5px; padding: 4px 0; }
-.heading-row input[type="text"] { width: 100%; min-width: 0; }
+.heading-row input[type="text"], .heading-row textarea { width: 100%; min-width: 0; }
 .heading-count { min-width: 20px; padding: 3px; border-radius: 4px; background: var(--card); color: var(--wine-dark); font-size: 11px; text-align: center; }
 .heading-preview-contents { max-height: 38vh; overflow-y: auto; margin: 8px 0; padding-inline-start: 25px; overflow-wrap: anywhere; }
 .heading-preview-contents li { margin: 5px 0; }
+.heading-preview-contents .heading-preview-part { color: var(--wine-dark); font-weight: 800; margin-block-start: 12px; }
 .heading-dialog-actions { justify-content: flex-end; margin-top: 12px; }
 #headingEditor #previewHeadings, #headingEditor #applyHeadings { color: #fff3db; background: var(--wine-dark); }
 .maker-panel .pdf-status { margin-top: 8px; overflow-wrap: anywhere; }
@@ -213,6 +214,11 @@ button { cursor: pointer; }
 .search-box input { width: 100%; outline: none; border: 0; background: transparent; color: var(--ink); font-size: 12px; }
 .search-box input::placeholder { color: #a28d80; }
 .contents { margin-top: 11px; padding-right: 3px; }
+.contents-part { display: flex; align-items: baseline; gap: 9px; padding: 12px 9px 5px; margin-top: 7px; border-block-start: 1px solid var(--border); color: var(--wine-dark); font-size: 12px; font-weight: 800; }
+.contents .contents-part .page-title { white-space: normal; overflow-wrap: anywhere; }
+.contents-part .page-no { flex: 0 0 18px; }
+#bookTitle, #bookDescription, #currentLabel { white-space: pre-line; }
+.contents-entry--part { margin-inline-start: 10px; }
 .contents-entry > button { width: 100%; display: flex; align-items: baseline; gap: 9px; padding: 8px 9px; border: 0; border-left: 2px solid transparent; background: transparent; color: #695457; text-align: left; font-size: 11px; }
 .contents-entry > button:hover { background: rgba(255,255,255,.35); color: var(--wine); }
 .contents-entry > button.active { border-left-color: var(--wine); background: rgba(111,38,55,.09); color: var(--wine-dark); font-weight: 800; }

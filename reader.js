@@ -78,27 +78,14 @@ function renderEntry() {
   $("#pageViewport").innerHTML = `<article class="book-page" dir="${direction}"><div class="page-inner"><div class="page-content">${html}</div></div></article>`;
   $("#currentPage").textContent = readerState.currentEntry + 1;
   $("#totalPages").textContent = readerState.entries.length;
-  $("#currentLabel").textContent = entry.title;
+  $("#currentLabel").textContent = normalizeBreaks(entry.title);
   $("#previousButton").disabled = readerState.currentEntry === 0;
   $("#nextButton").disabled = readerState.currentEntry === readerState.entries.length - 1;
   renderContents();
 }
 
 function renderContents() {
-  const contents = $("#contents");
-  const filtered = readerState.entries.map((entry, index) => ({ entry, index })).filter(({ entry }) => !readerState.search || `${entry.title} ${JSON.stringify(entry.blocks)}`.toLowerCase().includes(readerState.search));
-  contents.innerHTML = filtered.map(({ entry, index }) => {
-    const active = index === readerState.currentEntry;
-    const subsections = active ? entry.blocks.map((block, blockIndex) => ({ block, blockIndex })).filter(({ block }) => block.type === "heading" && Number(block.level) === 3) : [];
-    const subitems = subsections.length ? `<div class="contents-subtree" role="group" aria-label="${escapeAttribute(entry.title)} sections">${subsections.map(({ block, blockIndex }) => `<a class="contents-subitem" data-section="entry-${index}-section-${blockIndex}" href="#entry-${index}-section-${blockIndex}"><span class="page-no">H3</span><span class="page-title">${inlineMarkdown(block.text)}</span></a>`).join("")}</div>` : "";
-    return `<div class="contents-entry"><button type="button" class="${active ? "active" : ""}"${active ? ' aria-current="page"' : ""} data-entry="${index}"><span class="page-no">H2</span><span class="page-title">${escapeHtml(entry.title)}</span></button>${subitems}</div>`;
-  }).join("") || '<p class="empty-search">No matching entries.</p>';
-  contents.querySelectorAll("button[data-entry]").forEach((button) => button.addEventListener("click", () => goToEntry(Number(button.dataset.entry))));
-  contents.querySelectorAll("a[data-section]").forEach((link) => link.addEventListener("click", (event) => {
-    event.preventDefault();
-    document.getElementById(link.dataset.section)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }));
-  $("#contentsCount").textContent = `${filtered.length}/${readerState.entries.length}`;
+  renderBookContents(readerState.entries, readerState.currentEntry, readerState.search, "data-entry", goToEntry);
 }
 
 function goToEntry(index) {
@@ -141,8 +128,8 @@ function renderBlock(block, assets, entryIndex, blockIndex) {
 
 function applyPackageMeta(bookPackage) {
   const blockCount = bookPackage.entries.reduce((sum, entry) => sum + entry.blocks.length, 0);
-  $("#bookTitle").textContent = bookPackage.book.title;
-  $("#bookDescription").textContent = bookPackage.book.description || "Reader-ready TTRPG book.";
+  $("#bookTitle").textContent = normalizeBreaks(bookPackage.book.title);
+  $("#bookDescription").textContent = normalizeBreaks(bookPackage.book.description || "Reader-ready TTRPG book.");
   $("#themeLabel").textContent = `JSON v${bookPackage.schemaVersion}`;
   $("#pageCount").textContent = `${bookPackage.entries.length} entries`;
   $("#statPages").textContent = bookPackage.entries.length;
@@ -195,7 +182,8 @@ function isReadableBlock(block) {
   return true;
 }
 
-function inlineMarkdown(value) { let html = escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>'); }
+function normalizeBreaks(value) { return String(value).replace(/[ \t]*<br[ \t]*\/?[ \t]*>[ \t]*/gi, "\n").replace(/\r\n?/g, "\n"); }
+function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function escapeAttribute(value) { return escapeHtml(value); }
 function setStatus(message) { $("#sourceStatus").innerHTML = `<i></i> ${escapeHtml(message)}`; }

@@ -8,7 +8,8 @@ The Markdown remains the source of truth. The web reader presents the content se
 
 ## Content structure
 
-- `##` headings become top-level content entries.
+- `#` headings become non-clickable part labels in the contents list, grouping the following entries.
+- `##` headings become clickable content entries.
 - `###` headings become sections inside the current entry.
 - `####` headings become subsections.
 - `#####` headings become notes, labels, or small callouts.
@@ -51,6 +52,7 @@ Supported image rule fields:
 ## Tables and text
 
 - Markdown tables become responsive reader tables.
+- Explicit HTML line breaks (`<br>`, `<br/>`, `<br />`) are converted to actual newlines in book text and rendered as hard line breaks.
 - Heading levels, paragraphs, bold, italic, links, and unordered lists are preserved.
 - Custom CSS is not executed directly. The Maker may extract allowlisted color/font variables into `theme.tokens`; selectors, absolute coordinates, and other Homebrewery layout rules are not carried into the reader.
 - Raw HTML is supported only through explicitly recognized safe patterns, such as the demo's video-card block.

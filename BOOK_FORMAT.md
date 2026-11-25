@@ -33,13 +33,15 @@ Open the ZIP directly in the Reader to use its bundled images offline. The Reade
 These rules apply to every book unless a future format version changes them:
 
 1. The configured heading level, normally H2, creates an entry.
-2. Lower heading levels remain blocks inside that entry.
+2. H1 headings are non-clickable part labels in the contents list. They remain heading blocks and introduce the following H2 entries without creating extra entries. H3–H6 remain blocks inside the entry.
 3. `\page` does not create a web entry. It may be preserved as source metadata.
 4. Images are inline by default and appear in source order.
 5. Homebrewery absolute positioning is ignored.
 6. Backgrounds, page overlays, menus, and decorative banners are ignored by role or source policy.
 7. Book-specific layout decisions belong in a builder-side conversion profile or explicit block metadata, not in the global reader.
 8. A semantic image placement such as `entry-top-right` may be defined by a builder profile when a book needs an emblem or similar feature art beside an entry heading.
+
+9. Explicit HTML line breaks (`<br>`, `<br/>`, `<br />`) become newline characters (`\n`) in text fields. Both the Maker and Reader display these as line breaks.
 
 ## Versioning rules
 

@@ -50,6 +50,7 @@ async function smoke(width) {
   try {
     const maker = await browser.page("bookmaker.html", width);
     await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Maker demo");
+    await smokePartsAndBreaks(browser, width);
     const pdfBase = new URL(await maker.evaluate(() => {
       const script = document.querySelector("script[data-pdf-engine]");
       return new URL(script.dataset.pdfEngine, script.src).href;
@@ -907,6 +908,104 @@ async function smokeOrganizationAndCaptions(browser, width) {
   await reader.upload("jsonInput", "empty-book.json", emptyBook);
   await reader.until(() => document.getElementById("currentPage").textContent === "0" &&
     !document.getElementById("pageViewport").textContent, "Reader clears the previous book after every entry was removed");
+}
+
+async function smokePartsAndBreaks(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Parts fixture maker");
+  await maker.upload("mdInput", "parts-and-breaks.md", [
+    "# Part One", "## Alpha", "First<br>Second<br />Third", "<BR>Fourth", "",
+    "- List<br/>item", "", "| Name<br>Detail | Value |", "| --- | --- |", "| A<br>B | 7 |",
+    "### Scroll target", "## Beta", "A second entry.", "# Part Two", "## Gamma", "A third entry."
+  ].join("\n"));
+  await maker.until(() => state.entries[0]?.title === "Alpha", "Parts fixture imported");
+  const result = await maker.evaluate(() => {
+    const contents = document.getElementById("contents");
+    const rows = () => [...contents.children].map((row) => row.querySelector(".page-title")?.textContent);
+    const initial = rows();
+    const partLabels = [...contents.querySelectorAll(".contents-part")];
+    const staticParts = partLabels.every((row) => row.tabIndex === -1 && !row.querySelector("a, button"));
+    const paragraph = document.querySelector("#pageViewport p");
+    const breaks = [paragraph.querySelectorAll("br").length, document.querySelector("#pageViewport li").querySelectorAll("br").length,
+      document.querySelector("#pageViewport th").querySelectorAll("br").length, document.querySelector("#pageViewport td").querySelectorAll("br").length];
+    const alphaHasSection = Boolean(contents.querySelector("a[data-section]"));
+    const search = document.getElementById("searchInput");
+    search.value = "beta";
+    search.dispatchEvent(new Event("input"));
+    const childSearch = rows();
+    search.value = "part two";
+    search.dispatchEvent(new Event("input"));
+    const partSearch = rows();
+    search.value = "";
+    search.dispatchEvent(new Event("input"));
+    contents.querySelector('button[data-page="2"]').click();
+    return { initial, staticParts, breaks, alphaHasSection, childSearch, partSearch, active: state.currentPage,
+      book: window.bookEditing.exportPackage() };
+  });
+  const expected = ["Part One", "Alpha", "Beta", "Part Two", "Gamma"];
+  assert.deepEqual(result.initial, expected);
+  assert.ok(result.staticParts);
+  assert.deepEqual(result.breaks, [3, 1, 1, 1]);
+  assert.ok(result.alphaHasSection);
+  assert.deepEqual(result.childSearch, ["Part One", "Beta"]);
+  assert.deepEqual(result.partSearch, ["Part Two", "Gamma"]);
+  assert.equal(result.active, 2);
+  assert.deepEqual(result.book.entries.map(({ title }) => title), ["Alpha", "Beta", "Gamma"]);
+  const paragraph = result.book.entries[0].blocks.find(({ type }) => type === "paragraph");
+  assert.equal(paragraph.text, "First\nSecond\nThird\nFourth");
+  // Older JSON with literal HTML break tags must display correctly too.
+  paragraph.text = "First<br>Second<br />Third\nFourth";
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Parts fixture reader");
+  await reader.upload("jsonInput", "parts-and-breaks.json", JSON.stringify(result.book));
+  await reader.until(() => readerState.entries[0]?.title === "Alpha", "Parts fixture opened in Reader");
+  const read = await reader.evaluate(() => ({
+    rows: [...document.getElementById("contents").children].map((row) => row.querySelector(".page-title")?.textContent),
+    breaks: document.querySelector("#pageViewport p").querySelectorAll("br").length,
+    staticParts: [...document.querySelectorAll(".contents-part")].every((row) => !row.querySelector("a, button"))
+  }));
+  assert.deepEqual(read.rows, expected);
+  assert.equal(read.breaks, 3);
+  assert.ok(read.staticParts);
+  await maker.upload("jsonInput", "parts-and-breaks.json", JSON.stringify(result.book));
+  await maker.until(() => state.visualEdits && state.entries[0]?.title === "Alpha", "Legacy JSON reopened in Maker");
+  assert.equal(await maker.evaluate(() => state.entries[0].blocks.find(({ type }) => type === "paragraph").text), "First\nSecond\nThird\nFourth");
+  await maker.evaluate(() => {
+    document.getElementById("toggleBookEditing").click();
+    document.querySelector("#pageViewport p").click();
+    const form = document.getElementById("bookEditingForm");
+    form.elements.text.value = "Edited<br>line";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+  });
+  await maker.until(() => state.entries[0].blocks.find(({ type }) => type === "paragraph").text === "Edited\nline", "Edited breaks normalized");
+  const edit = await maker.evaluate(() => {
+    document.getElementById("openHeadings").click();
+    const part = document.querySelector('input[aria-label="Title for H1 Part One"]');
+    const entry = document.querySelector('input[aria-label="Title for H2 Alpha"]');
+    part.value = "Renamed Part";
+    entry.value = "Renamed Entry";
+    entry.dispatchEvent(new Event("input", { bubbles: true }));
+    document.getElementById("previewHeadings").click();
+    const preview = [...document.querySelectorAll("#headingPreviewContents .heading-preview-part")].map((row) => row.textContent);
+    document.getElementById("applyHeadings").click();
+    return { preview, title: state.entries[0].title, rows: [...document.getElementById("contents").children].map((row) => row.querySelector(".page-title")?.textContent) };
+  });
+  assert.ok(edit.preview.some((title) => title.includes("Renamed Part")));
+  assert.equal(edit.title, "Renamed Entry");
+  assert.deepEqual(edit.rows, ["Renamed Part", "Renamed Entry", "Beta", "Part Two", "Gamma"]);
+  // Previously exported books may store the H1 at the end of the prior entry or in a heading-only preamble.
+  const firstPart = result.book.entries[0].blocks.shift();
+  const secondPart = result.book.entries[2].blocks.shift();
+  result.book.entries[1].blocks.push(secondPart);
+  result.book.entries.unshift({ id: "legacy-preamble", title: "Welcome", order: 0, blocks: [firstPart] });
+  await reader.upload("jsonInput", "legacy-parts.json", JSON.stringify(result.book));
+  await reader.until(() => readerState.entries[0]?.title === "Welcome", "Legacy part blocks opened in Reader");
+  const legacy = await reader.evaluate(() => ({
+    rows: [...document.getElementById("contents").children].map((row) => row.querySelector(".page-title")?.textContent),
+    count: document.getElementById("contentsCount").textContent
+  }));
+  assert.deepEqual(legacy.rows, expected);
+  assert.equal(legacy.count, "3/3");
 }
 
 async function smokeHeadingGroupOrdering(browser, width) {

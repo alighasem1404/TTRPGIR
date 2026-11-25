@@ -318,9 +318,10 @@
         if (block.type === "embed" && typeof block.title === "string") return { ...block, title: change(block.title) };
         return block;
       });
-      const lead = entry.blocks[0];
+      const leadIndex = entryHeadingIndex(entry.blocks, entryHeadingLevel(state.config));
+      const lead = entry.blocks[leadIndex];
       const syncedTitle = lead?.type === "heading" && lead.level === entryHeadingLevel(state.config) && entry.title === lead.text;
-      const title = syncedTitle ? blocks[0].text : change(entry.title);
+      const title = syncedTitle ? blocks[leadIndex].text : change(entry.title);
       if (!title.trim()) emptyTitle = true;
       if (count > previousCount) entryCount += 1;
       return { ...entry, title, blocks };
@@ -737,9 +738,9 @@
   }
 
   function formatTextBlock(text, format) {
-    const trimmed = text.trim();
+    const trimmed = normalizeBreaks(text.trim());
     return /^h[1-6]$/.test(format)
-      ? { type: "heading", level: Number(format[1]), text: trimmed.replace(/\s*\n\s*/g, " ") }
+      ? { type: "heading", level: Number(format[1]), text: trimmed }
       : { type: "paragraph", text: trimmed, ...(format !== "paragraph" && { style: format }) };
   }
 
@@ -830,7 +831,7 @@
         state.recoveredImages.delete(context.key);
       }
       if (!add) blocks.splice(index, 1);
-      const first = blocks[0]?.type === "heading" && blocks[0].level === entryHeadingLevel(state.config) ? 1 : 0;
+      const first = entryHeadingIndex(blocks, entryHeadingLevel(state.config)) + 1;
       const positions = { same: index, above: Math.max(first, index - 1), below: index + 1, top: first, bottom: blocks.length };
       blocks.splice(positions[position], 0, image);
       save(withBlocks(entry, blocks), "Image updated.");
@@ -898,11 +899,11 @@
 
   function positionImages(blocks, moved, position) {
     if (position === "same") return blocks;
-    const first = blocks[0]?.type === "heading" && blocks[0].level === entryHeadingLevel(state.config) ? 1 : 0;
+    const first = entryHeadingIndex(blocks, entryHeadingLevel(state.config)) + 1;
     if (position === "top" || position === "bottom") {
       const images = blocks.filter((block) => moved.has(block));
       const remaining = blocks.filter((block) => !moved.has(block));
-      remaining.splice(position === "top" ? first : remaining.length, 0, ...images);
+      remaining.splice(position === "top" ? entryHeadingIndex(remaining, entryHeadingLevel(state.config)) + 1 : remaining.length, 0, ...images);
       return remaining;
     }
     const step = position === "above" ? -1 : 1;
@@ -1111,8 +1112,9 @@
   function headingGroups(blocks) {
     const root = { blocks: [], children: [] };
     const stack = [root];
+    const lead = Math.max(0, entryHeadingIndex(blocks, entryHeadingLevel(state.config)));
     for (const [index, block] of blocks.entries()) {
-      if (block.type !== "heading" || index === 0) {
+      if (block.type !== "heading" || index <= lead) {
         stack.at(-1).blocks.push(block);
         continue;
       }
