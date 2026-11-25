@@ -49,8 +49,8 @@ function reprocessLineBreaks({ book, recoveries }) {
 function reprocessPartHeadings({ book, level, mergedEntries }) {
   if (level === 1) return { changed: false, message: "Not applicable: this book uses H1 as its entry heading level." };
   const entries = book.entries;
-  const isEntryHeading = (block) => block.type === "heading" && block.level === level;
-  const isPart = (block) => block.type === "heading" && block.level === 1;
+  const isEntryHeading = (block) => !block.statBlock && block.type === "heading" && block.level === level;
+  const isPart = (block) => !block.statBlock && block.type === "heading" && block.level === 1;
   let headings = 0;
   let blocksMoved = 0;
   // Work backwards so consecutive legacy part-only entries can be folded into

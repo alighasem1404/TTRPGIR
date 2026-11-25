@@ -10,14 +10,16 @@ Open Bookmaker to import Markdown, edit headings, and attach a matching PDF to r
 
 Reprocessing works on the loaded package, so existing text edits, chapter order, image assets, and the chosen palette are retained. The original file is not overwritten.
 
-## Restore missing images from the original Markdown
+## Restore missing images and stat blocks from the original Markdown
 
 1. Open your existing JSON or ZIP in Bookmaker.
 2. Choose **Restore from Markdown** and select its original Markdown file (or use the current loaded Markdown).
-3. Review image previews, the source page, and suggested entry and insertion position. Nothing is selected automatically. **Select suggested** selects only confidently placed images without possible duplicate or replacement matches.
+3. Choose **Missing images** and review image previews, the source page, and suggested entry and insertion position. Nothing is selected automatically. **Select suggested** selects only confidently placed images without possible duplicate or replacement matches.
 4. Select any other images you want and choose their destinations. Apply **Restore selected images**, then export the updated package.
 
 This adds selected image blocks and any required assets without reimporting the book or changing existing text, headings, entry order, captions, palette, or bundled and recovered images. An image's original URL may still need repair through the existing image recovery workflow if its host is unavailable.
+
+For an older book whose monster wrappers were lost, choose **Stat blocks** instead. Review the suggested first and last included blocks, then select the groups to recover. The tool can merge redundant legacy monster entries into the preceding entry (and merge internal entry boundaries when one stat block spans several entries); all existing blocks remain in their original order and retain their edited content. You can leave a legacy entry separate by clearing its optional merge checkbox. Apply **Recover selected stat blocks** and export the result. Image and stat-block updates are applied separately.
 
 ## GitHub Pages
 

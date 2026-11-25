@@ -150,7 +150,7 @@
     for (const entry of state.entries) {
       let h2 = entry.title;
       for (const block of entry.blocks) {
-        if (block.type === "heading" && block.level === 2) h2 = block.text;
+        if (!block.statBlock && block.type === "heading" && block.level === 2) h2 = block.text;
         if (block.type !== "image" || block[sourceHidden]) continue;
         const asset = assets.get(block.assetId);
         const urls = [...new Set([asset?.src, block[markdownImage]?.url, block[imageSlotContext]?.url].filter(Boolean))];
@@ -299,7 +299,7 @@
         if (block.type === "heading" || block.type === "paragraph") {
           const text = change(block.text);
           if (block.type === "heading" && !text.trim()) emptyTitle = true;
-          if (block.type === "heading" && block.level === 3 && text !== block.text) sectionRenames.push([sectionName(block.text), sectionName(text)]);
+          if (!block.statBlock && block.type === "heading" && block.level === 3 && text !== block.text) sectionRenames.push([sectionName(block.text), sectionName(text)]);
           return text === block.text ? block : { ...block, text };
         }
         if (block.type === "list") return { ...block, items: block.items.map(change) };
@@ -340,7 +340,7 @@
     const url = selected.type === "image" ? imageUrl(selected) : "";
     const section = selected.type === "paragraph" ? paragraphPosition(entry, index) : null;
     const candidates = state.entries.flatMap((item) => item.blocks.flatMap((block, index) =>
-      block.type === selected.type && !block[sourceHidden] ? [{ entry: item, index, block }] : []));
+      block.type === selected.type && !block[sourceHidden] && (selected.type !== "heading" || Boolean(block.statBlock) === Boolean(selected.statBlock)) ? [{ entry: item, index, block }] : []));
     function add(value, label, test) {
       const targets = candidates.filter(test);
       if (targets.length > 1) matches.set(value, { label, targets });
@@ -357,7 +357,7 @@
       if (section) {
         const atPosition = new Set(state.entries.flatMap(({ blocks }) => splitSections(blocks)
           .filter(({ title }) => title && sectionName(title) === section.key)
-          .map(({ blocks }) => blocks.filter((block) => block.type === "paragraph" && !block[sourceHidden])[section.number - 1])));
+          .map(({ blocks }) => blocks.filter((block) => block.type === "paragraph" && !block.statBlock && !block[sourceHidden])[section.number - 1])));
         add("section-position", `Paragraph ${section.number} under ${section.title}`, ({ block }) => atPosition.has(block));
       }
       add("paragraph-style", "Same paragraph format across the book", ({ block }) => (block.style || "") === (selected.style || ""));
@@ -370,9 +370,11 @@
   }
 
   function paragraphPosition(entry, index) {
+    if (entry.blocks[index]?.statBlock) return null;
     let number = 0;
     for (let previous = index; previous >= 0; previous -= 1) {
       const block = entry.blocks[previous];
+      if (block.statBlock) continue;
       if (block.type === "heading" && block.level <= 3) {
         if (block.level === 3) return { title: block.text, key: sectionName(block.text), number };
         return null;
@@ -413,7 +415,8 @@
     const entry = currentEntry();
     const block = add ? null : entry.blocks[index];
     const format = block?.type === "heading" ? `h${block.level}` : block?.style || "paragraph";
-    const isSection = block?.type === "heading" && block.level === 3;
+    const statBlock = add ? entry.blocks[index - 1]?.statBlock : block?.statBlock;
+    const isSection = !statBlock && block?.type === "heading" && block.level === 3;
     const formats = [["paragraph", "Paragraph"], ["book-quote", "Quote"], ["book-callout", "Callout"],
       ...[1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, `Heading H${level}`])];
     if (!formats.some(([value]) => value === format)) formats.push([format, "Current style"]);
@@ -452,6 +455,7 @@
         replacement = /^h[1-6]$/.test(selected) ? [formatTextBlock(value, selected)]
           : value.split(/\n\s*\n/).filter((text) => text.trim()).map((text) => formatTextBlock(text, selected));
       }
+      if (statBlock) for (const part of replacement) part.statBlock = statBlock;
       const visibility = form.elements.visibility?.value;
       if (visibility && replacement[0]?.level === 3) replacement[0][sectionVisibility] = visibility;
       if (block?.[sourceHeadingKey] && replacement[0]?.type === "heading") replacement[0][sourceHeadingKey] = block[sourceHeadingKey];
@@ -470,12 +474,12 @@
       blocks.splice(index, add ? 0 : 1, ...replacement);
       let entries = withBlocks(entry, blocks);
       const entryLevel = entryHeadingLevel(state.config);
-      if (command === "save" && block?.type === "heading" && replacement[0]?.type === "heading" &&
+      if (!statBlock && command === "save" && block?.type === "heading" && replacement[0]?.type === "heading" &&
         (block.level === entryLevel || replacement[0].level === entryLevel)) {
         const edit = { title: replacement[0].text, level: replacement[0].level };
         entries = regroupEditedHeadings(new Map([[block, edit]]));
       } else {
-        const newEntryHeading = replacement.find((part) => part.type === "heading" && part.level === entryLevel);
+        const newEntryHeading = replacement.find((part) => !part.statBlock && part.type === "heading" && part.level === entryLevel);
         if (newEntryHeading) {
           newEntryHeading.level = entryLevel === 1 ? 2 : 1;
           entries = regroupEditedHeadings(new Map([[newEntryHeading, { title: newEntryHeading.text, level: entryLevel }]]), entries);
@@ -507,6 +511,7 @@
       </div>`, (command) => {
       const edited = command === "remove" ? null : readBlock();
       if (add) {
+        if (entry.blocks[index - 1]?.statBlock) edited.statBlock = entry.blocks[index - 1].statBlock;
         const blocks = [...entry.blocks];
         blocks.splice(index, 0, edited);
         save(withBlocks(entry, blocks), `Added ${noun}.`);
@@ -692,6 +697,7 @@
 
     function formatBlock(original, value, type) {
       const updated = formatTextBlock(value, type);
+      if (original.statBlock) updated.statBlock = original.statBlock;
       if (updated.type === "heading") updated[sourceHeadingKey] = original[sourceHeadingKey];
       if (updated.level === 3) updated[sectionVisibility] = updateVisibility ? visibility : original[sectionVisibility];
       return updated;
@@ -711,7 +717,7 @@
           : words.split(/\n\s*\n/).filter((part) => part.trim()).map((part) => formatBlock(block, part, targetFormat));
       if (parts.length && block[sourceArtifact]) parts[0][sourceArtifact] = block[sourceArtifact];
       for (const [index, part] of parts.entries()) {
-        if (part.type !== "heading" || part.level !== entryLevel && (index !== 0 || block.level !== entryLevel)) continue;
+        if (part.statBlock || part.type !== "heading" || part.level !== entryLevel && (index !== 0 || block.level !== entryLevel)) continue;
         const before = block.type === "heading" && index === 0 ? block : { ...part, level: entryLevel === 1 ? 2 : 1 };
         headingChanges.set(before, { title: part.text, level: part.level, block: part });
         parts[index] = before;
@@ -818,6 +824,7 @@
         : !url && recovered ? recovered.blob : null;
       if (!isCurrent()) return;
       const image = { ...block, type: "image", role, placement: position === "same" ? block?.placement || "inline" : "inline", width: newWidth, caption, alt };
+      if (add && entry.blocks[index - 1]?.statBlock) image.statBlock = entry.blocks[index - 1].statBlock;
       if (position !== "same") delete image.className;
       if (add || url && url !== editableUrl) image.assetId = ensureAsset(url || "about:blank", alt, role);
       const oldKey = block?.[imageSlotContext]?.key;
@@ -833,7 +840,16 @@
       if (!add) blocks.splice(index, 1);
       const first = entryHeadingIndex(blocks, entryHeadingLevel(state.config)) + 1;
       const positions = { same: index, above: Math.max(first, index - 1), below: index + 1, top: first, bottom: blocks.length };
-      blocks.splice(positions[position], 0, image);
+      let destination = positions[position];
+      if (image.statBlock) {
+        const start = blocks.findIndex((item) => item.statBlock === image.statBlock);
+        const end = blocks.findLastIndex((item) => item.statBlock === image.statBlock);
+        destination = start < 0 ? index : Math.max(start, Math.min(end + 1, destination));
+      } else if (blocks[destination - 1]?.statBlock && blocks[destination - 1].statBlock === blocks[destination]?.statBlock) {
+        const group = blocks[destination].statBlock;
+        destination = position === "above" || position === "top" ? blocks.findIndex((item) => item.statBlock === group) : blocks.findLastIndex((item) => item.statBlock === group) + 1;
+      }
+      blocks.splice(destination, 0, image);
       save(withBlocks(entry, blocks), "Image updated.");
     });
     wireScope(scopes, "image");
@@ -897,13 +913,40 @@
     save(entries, `Updated ${targets.length} matching images.`);
   }
 
-  function positionImages(blocks, moved, position) {
+  function positionImages(blocks, moved, position, withinStat = false) {
     if (position === "same") return blocks;
-    const first = entryHeadingIndex(blocks, entryHeadingLevel(state.config)) + 1;
+    if (!withinStat && blocks.some((block) => block.statBlock)) {
+      // Treat each stat panel as one unit when moving normal images, and keep
+      // matching images inside their own panel when moving stat artwork.
+      const units = [];
+      for (let index = 0; index < blocks.length;) {
+        const group = blocks[index].statBlock;
+        if (!group) { units.push({ blocks: [blocks[index]], movable: moved.has(blocks[index]) }); index += 1; continue; }
+        const start = index;
+        while (index < blocks.length && blocks[index].statBlock === group) index += 1;
+        units.push({ blocks: positionImages(blocks.slice(start, index), moved, position, true), movable: false });
+      }
+      const first = units.findIndex((unit) => entryHeadingIndex(unit.blocks, entryHeadingLevel(state.config)) >= 0) + 1;
+      if (position === "top" || position === "bottom") {
+        const moving = units.filter((unit) => unit.movable);
+        const remaining = units.filter((unit) => !unit.movable);
+        const top = remaining.findIndex((unit) => entryHeadingIndex(unit.blocks, entryHeadingLevel(state.config)) >= 0) + 1;
+        remaining.splice(position === "top" ? top : remaining.length, 0, ...moving);
+        return remaining.flatMap((unit) => unit.blocks);
+      }
+      const step = position === "above" ? -1 : 1;
+      for (let index = step < 0 ? first + 1 : units.length - 2; index >= first && index < units.length; index -= step) {
+        const next = index + step;
+        if (next < first || next >= units.length || !units[index].movable || units[next].movable) continue;
+        [units[index], units[next]] = [units[next], units[index]];
+      }
+      return units.flatMap((unit) => unit.blocks);
+    }
+    const first = withinStat ? 0 : entryHeadingIndex(blocks, entryHeadingLevel(state.config)) + 1;
     if (position === "top" || position === "bottom") {
       const images = blocks.filter((block) => moved.has(block));
       const remaining = blocks.filter((block) => !moved.has(block));
-      remaining.splice(position === "top" ? entryHeadingIndex(remaining, entryHeadingLevel(state.config)) + 1 : remaining.length, 0, ...images);
+      remaining.splice(position === "top" ? (withinStat ? 0 : entryHeadingIndex(remaining, entryHeadingLevel(state.config)) + 1) : remaining.length, 0, ...images);
       return remaining;
     }
     const step = position === "above" ? -1 : 1;
@@ -1023,7 +1066,7 @@
 
   function sectionEnd(blocks, index) {
     let end = index + 1;
-    while (end < blocks.length && !(blocks[end].type === "heading" && blocks[end].level <= 3)) end += 1;
+    while (end < blocks.length && !(!blocks[end].statBlock && blocks[end].type === "heading" && blocks[end].level <= 3)) end += 1;
     return end;
   }
 
@@ -1031,7 +1074,7 @@
     const parts = [];
     for (let index = 0; index < blocks.length;) {
       const block = blocks[index];
-      const section = block.type === "heading" && block.level === 3;
+      const section = !block.statBlock && block.type === "heading" && block.level === 3;
       const end = section ? sectionEnd(blocks, index) : index + 1;
       parts.push({ title: section ? block.text : "", blocks: blocks.slice(index, end) });
       index = end;
@@ -1114,7 +1157,7 @@
     const stack = [root];
     const lead = Math.max(0, entryHeadingIndex(blocks, entryHeadingLevel(state.config)));
     for (const [index, block] of blocks.entries()) {
-      if (block.type !== "heading" || index <= lead) {
+      if (block.statBlock || block.type !== "heading" || index <= lead) {
         stack.at(-1).blocks.push(block);
         continue;
       }
@@ -1265,6 +1308,8 @@
             : choice === "divider" ? { type: "divider", style: "rule" }
               : { type: "paragraph", style: "book-callout", text: artifact.text || artifact.label };
           converted[sourceArtifact] = artifact;
+          const group = block?.statBlock || blocks.find((item) => artifact.anchor && item[sourceHeadingKey] === artifact.anchor)?.statBlock;
+          if (group) converted.statBlock = group;
           const at = block ? blocks.indexOf(block) : sourceInsertIndex(blocks, artifact);
           blocks.splice(at, block ? 1 : 0, converted);
         }

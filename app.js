@@ -52,6 +52,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#restoreSelectSuggested").addEventListener("click", selectSuggestedRestores);
   $("#restoreClearSelection").addEventListener("click", clearRestoreSelection);
   $("#applyRestore").addEventListener("click", applyBookRestore);
+  $("#restoreKind").addEventListener("change", showRestoreKind);
+  $("#restoreStatSelectSuggested").addEventListener("click", selectSuggestedStatRestores);
+  $("#restoreStatClearSelection").addEventListener("click", clearStatRestoreSelection);
+  $("#applyStatRestore").addEventListener("click", applyStatRestore);
   $("#bookRestore").addEventListener("close", (event) => { if (!event.target.open) resetBookRestore(); });
   $("#reprocessBook").addEventListener("click", openBookReprocess);
   $("#applyReprocess").addEventListener("click", applyBookReprocess);
@@ -187,8 +191,8 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
   if (state.visualEdits) refreshEditedImageSlots();
   else refreshImageSlots();
   $("#openHeadings").disabled = state.visualEdits
-    ? !state.entries.some((entry) => entry.blocks.some((block) => block.type === "heading"))
-    : !findMarkdownHeadings(source, markdownHeader(source).end).length;
+    ? !state.entries.some((entry) => entry.blocks.some((block) => block.type === "heading" && !block.statBlock))
+    : !findMarkdownHeadings(source, markdownHeader(source).end).some((heading) => !heading.statBlock);
   if (!state.sourceTheme) state.sourceTheme = bookPackage.theme;
   state.currentPage = 0;
   applyPackageMeta(bookPackage);
@@ -205,8 +209,8 @@ function loadPackage(bookPackage, fileName, source = "", config = {}, images = n
 
 function openHeadingEditor() {
   const headings = state.visualEdits ? state.entries.flatMap((entry) => entry.blocks
-    .filter((block) => block.type === "heading").map((block) => ({ block, title: block.text, level: block.level })))
-    : findMarkdownHeadings(state.source, markdownHeader(state.source).end);
+    .filter((block) => block.type === "heading" && !block.statBlock).map((block) => ({ block, title: block.text, level: block.level })))
+    : findMarkdownHeadings(state.source, markdownHeader(state.source).end).filter((heading) => !heading.statBlock);
   const levels = [1, 2, 3, 4, 5, 6];
   const byLevel = levels.map(() => new Map());
   headings.forEach(({ level, title }, index) => {
@@ -247,7 +251,7 @@ function openHeadingEditor() {
     Object.assign(group, { row, selected, title, level });
   }
   headingDraft = { headings, groups, columnSections, preview: null };
-  $("#headingEntryHint").textContent = `H${entryHeadingLevel(state.config)} headings start new entries. H1 headings label book parts. Bulk shifts stop at H1 and H6.`;
+  $("#headingEntryHint").textContent = `H${entryHeadingLevel(state.config)} headings start new entries. H1 headings label book parts. Bulk shifts stop at H1 and H6. Stat block headings are edited in the preview.`;
   $("#headingSearch").value = "";
   $("#headingMessage").textContent = "";
   showHeadingPreview(false);
@@ -350,7 +354,7 @@ function renderHeadingPreview(preview) {
   $("#headingPreviewContents").innerHTML = bookContentsRows(entries).map((row) => {
     if (row.type === "part") return '<li class="heading-preview-part">H1 · ' + escapeHtml(row.title) + "</li>";
     const { entry } = row;
-    const sections = entry.blocks.filter((block) => block.type === "heading" && block.level === 3);
+    const sections = entry.blocks.filter((block) => !block.statBlock && block.type === "heading" && block.level === 3);
     const list = sections.map((block) => `<li>${escapeHtml(block.text)}</li>`).join("");
     return `<li><strong>${escapeHtml(entry.title)}</strong>${list ? `<ul>${list}</ul>` : ""}</li>`;
   }).join("");
@@ -401,8 +405,8 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
     const leadIndex = Math.max(0, entryHeadingIndex(entry.blocks, level));
     const lead = entry.blocks[leadIndex];
     const change = changes.get(lead);
-    const leadChange = lead?.type === "heading" && (lead.level === level || change?.level === level) && change;
-    const prefixPromotion = entry.blocks.findIndex((block, index) => index < leadIndex && changes.get(block)?.level === level);
+    const leadChange = !lead?.statBlock && lead?.type === "heading" && (lead.level === level || change?.level === level) && change;
+    const prefixPromotion = entry.blocks.findIndex((block, index) => index < leadIndex && !block.statBlock && changes.get(block)?.level === level);
     function startOriginalEntry() {
       if (!leadChange || leadChange.level === level || !entries.length) {
         const demotedToPart = leadChange?.level === 1 && level > 1;
@@ -419,7 +423,7 @@ function regroupEditedHeadings(changes, currentEntries = state.entries) {
       const edit = changes.get(original);
       const block = edit ? edit.block || { ...original, level: edit.level, text: stripMarkup(edit.title) } : original;
       if (prefixPromotion >= 0 && index === leadIndex) startOriginalEntry();
-      else if (index !== leadIndex && index !== prefixPromotion && edit?.level === level && original.level !== level) startEntry(edit.title);
+      else if (!original.statBlock && index !== leadIndex && index !== prefixPromotion && edit?.level === level && original.level !== level) startEntry(edit.title);
       entries.at(-1).blocks.push(block);
     }
   }
@@ -439,12 +443,14 @@ function applyEditedEntries(entries, { keepHeadingHistory = true, keepReplacemen
   state.visualEdits = true;
   state.entries = preserveExistingData ? entries : entries.map((entry, order) => ({ ...entry, order }));
   state.bookPackage.entries = state.entries;
+  if (entries.some((entry) => entry.blocks.some((block) => block.statBlock))) state.bookPackage.schemaVersion = Math.max(state.bookPackage.schemaVersion, 2);
+  $("#themeLabel").textContent = `JSON v${state.bookPackage.schemaVersion}`;
   if (!preserveExistingData) normalizeBookText(state.bookPackage);
   const index = state.entries.findIndex(({ id }) => id === currentId);
   state.currentPage = index < 0 ? Math.max(0, Math.min(state.currentPage, state.entries.length - 1)) : index;
   refreshEditedImageSlots();
   window.imageRecovery?.invalidate();
-  $("#openHeadings").disabled = !entries.some((entry) => entry.blocks.some((block) => block.type === "heading"));
+  $("#openHeadings").disabled = !entries.some((entry) => entry.blocks.some((block) => block.type === "heading" && !block.statBlock));
   $("#undoHeadings").disabled = !state.headingHistory.length;
   $("#statPages").textContent = entries.length;
   $("#pageCount").textContent = `${entries.length} entries`;
@@ -485,8 +491,12 @@ function parseDocument(source, config = {}) {
   const pageBreaks = (body.match(/\\page\b/g) || []).length;
   const allBody = prepareSourcePages(body);
   const entries = buildEntries(allBody, config);
-  const keptImages = allBody.split(/\r?\n/).map(parseMarkdownImage)
-    .filter((image) => image && !shouldIgnoreImage(image.alt, image.url, config, image.fullPage)).length;
+  const statRanges = findStatBlockRanges(allBody);
+  const keptImages = sourceLinesWithOffsets(allBody).filter(({ line, at }) => {
+    const image = parseMarkdownImage(line);
+    const inStat = statRanges.some((range) => range.start <= at && range.end > at);
+    return image && !shouldIgnoreImage(image.alt, image.url, config, image.fullPage || inStat);
+  }).length;
   return { metadata, css, entries, pageBreaks, images: keptImages, tables: (allBody.match(/\{\{fancyTable\b/gi) || []).length, directives: (allBody.match(/\{\{[^\n}]*/g) || []).length };
 }
 
@@ -505,8 +515,42 @@ function prepareSourcePages(body, separator = "\n") {
   }).join(separator);
 }
 
+// Homebrewery monster wrappers may contain nested columns, bonuses and other
+// double-brace directives. Only a balanced outer wrapper defines a stat block.
+function findStatBlockRanges(source, start = 0) {
+  const ranges = [];
+  let open = null;
+  let depth = 0;
+  let fence = "";
+  for (const line of source.slice(start).matchAll(/^[^\r\n]+/gm)) {
+    const marker = line[0].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = "";
+      continue;
+    }
+    if (marker) { fence = marker[1]; continue; }
+    for (const token of line[0].matchAll(/\{\{|\}\}/g)) {
+      const at = start + line.index + token.index;
+      if (token[0] === "{{") {
+        if (open) depth += 1;
+        else if (/^monster(?=[\s,:}]|$)/i.test(line[0].slice(token.index + 2))) {
+          const header = line[0].slice(token.index + 2).match(/^monster(?:[^\s{}"']|"[^"]*"|'[^']*')*/i)[0];
+          open = { start: at, contentStart: at + 2 + header.length };
+          depth = 1;
+        }
+      } else if (open && --depth === 0) {
+        ranges.push({ ...open, contentEnd: at, end: at + 2 });
+        open = null;
+      }
+    }
+  }
+  return ranges;
+}
+
 function findMarkdownHeadings(source, start = 0) {
   const headings = [];
+  const statRanges = findStatBlockRanges(source, start);
+  let statIndex = 0;
   let fence = "";
   for (const line of source.slice(start).matchAll(/^[^\r\n]+/gm)) {
     const marker = line[0].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
@@ -520,7 +564,10 @@ function findMarkdownHeadings(source, start = 0) {
     }
     const heading = parseHeadingLine(line[0]);
     if (!heading) continue;
-    headings.push({ ...heading, index: start + line.index, length: line[0].length });
+    const index = start + line.index;
+    while (statIndex < statRanges.length && statRanges[statIndex].end <= index) statIndex += 1;
+    const statBlock = statRanges[statIndex] && statRanges[statIndex].start <= index;
+    headings.push({ ...heading, index, length: line[0].length, ...(statBlock && { statBlock: true }) });
   }
   return headings;
 }
@@ -538,7 +585,7 @@ function entryHeadingLevel(config) {
 }
 
 function entryHeadingIndex(blocks, level = 2) {
-  return blocks.findIndex((block) => block.type === "heading" && block.level === level);
+  return blocks.findIndex((block) => !block.statBlock && block.type === "heading" && block.level === level);
 }
 
 function buildEntries(body, config = {}) {
@@ -547,6 +594,7 @@ function buildEntries(body, config = {}) {
   const headingMatches = [];
   let partStart;
   for (const heading of findMarkdownHeadings(withoutPageBreaks)) {
+    if (heading.statBlock) continue;
     if (heading.level === level) {
       headingMatches.push({ index: partStart ?? heading.index });
       partStart = undefined;
@@ -569,8 +617,8 @@ function buildEntries(body, config = {}) {
 function createEntry(raw, index, config = {}) {
   const normalized = cleanSource(applyConversionRules(raw, config));
   const headings = findMarkdownHeadings(normalized);
-  const firstHeading = headings.find((heading) => heading.level > 1 && heading.level <= 3);
-  const entryHeading = headings.find((heading) => heading.level === entryHeadingLevel(config)) || firstHeading;
+  const firstHeading = headings.find((heading) => !heading.statBlock && heading.level > 1 && heading.level <= 3);
+  const entryHeading = headings.find((heading) => !heading.statBlock && heading.level === entryHeadingLevel(config)) || firstHeading;
   const imageAlt = normalized.match(/!\[([^\]]+)\]/)?.[1];
   let title = entryHeading ? stripMarkup(entryHeading.title) : "";
   if (!title) title = index === 0 ? "Cover" : index === 1 ? "Inside cover" : imageAlt || `Entry ${index + 1}`;
@@ -580,14 +628,15 @@ function createEntry(raw, index, config = {}) {
 function buildBookPackage(source, fileName, parsed, config = {}) {
   const assets = new Map();
   const entries = parsed.entries.map((entry, index) => {
-    const blocks = markdownToBlocks(entry.normalized, config, assets);
-    return { id: `${slugify(entry.title) || "entry"}-${index + 1}`, title: entry.title, order: index, blocks,
+    const id = `${slugify(entry.title) || "entry"}-${index + 1}`;
+    const blocks = markdownToBlocks(entry.normalized, config, assets, id);
+    return { id, title: entry.title, order: index, blocks,
       [sourceArtifact]: collectSourceArtifacts(entry.raw, blocks, config) };
   });
   const metadata = parsed.metadata;
   return normalizeBookText({
     format: "ttrpg-book",
-    schemaVersion: 1,
+    schemaVersion: entries.some((entry) => entry.blocks.some((block) => block.statBlock)) ? 2 : 1,
     book: { id: slugify(metadata.title) || "untitled-book", title: metadata.title, description: metadata.description || "Imported Homebrewery Markdown book.", version: "0.1.0", tags: ["homebrewery-import"] },
     source: { format: "homebrewery-markdown", fileName },
     conversion: { entryHeadingLevel: config.rules?.entryHeadingLevel || 2, pageBreaks: config.rules?.pageBreaks || "ignore", imagePolicy: { defaultPlacement: config.rules?.images?.defaultPlacement || "inline", ignoredRoles: ["background", "page-overlay", "menu", "decorative-banner"], ignorePositioning: config.rules?.images?.ignorePositioning !== false } },
@@ -614,7 +663,23 @@ function themeFromCss(css) {
   return theme;
 }
 
-function markdownToBlocks(source, config, assets) {
+function markdownToBlocks(source, config, assets, entryId = "entry") {
+  const blocks = [];
+  let cursor = 0;
+  for (const [index, range] of findStatBlockRanges(source).entries()) {
+    blocks.push(...markdownToPlainBlocks(source.slice(cursor, range.start), config, assets));
+    const inner = cleanOrdinarySource(source.slice(range.contentStart, range.contentEnd))
+      .replace(/^(\s*\*\*[^*\n]+\*\*)[ \t]*::[ \t]*/gm, "$1: ")
+      .replace(/[ \t]*::[ \t]*$/gm, "");
+    const statBlock = `${entryId}-stat-${index + 1}`;
+    blocks.push(...markdownToPlainBlocks(inner, config, assets, true).map((block) => ({ ...block, statBlock })));
+    cursor = range.end;
+  }
+  blocks.push(...markdownToPlainBlocks(source.slice(cursor), config, assets));
+  return blocks;
+}
+
+function markdownToPlainBlocks(source, config, assets, stat = false) {
   const lines = source.split(/\r?\n/);
   const blocks = [];
   let index = 0;
@@ -627,9 +692,9 @@ function markdownToBlocks(source, config, assets) {
     if (image) {
       const { alt, url } = image;
       const rule = findImageRule(alt, url, config);
-      if (!shouldIgnoreImage(alt, url, config, image.fullPage)) {
+      if (!shouldIgnoreImage(alt, url, config, image.fullPage || stat)) {
         const assetId = getAssetId(alt, url, assets);
-        blocks.push({ type: "image", assetId, role: image.fullPage ? "full-page" : imageRole(alt), placement: rule?.location || "inline", className: rule?.className, width: rule?.width, [markdownImage]: image });
+        blocks.push({ type: "image", assetId, role: image.fullPage ? "full-page" : imageRole(alt), placement: stat ? "inline" : rule?.location || "inline", className: stat ? undefined : rule?.className, width: rule?.width, [markdownImage]: image });
       }
       index += 1;
       continue;
@@ -670,7 +735,7 @@ function markdownToBlocks(source, config, assets) {
     const paragraph = [line];
     index += 1;
     while (index < lines.length && lines[index].trim() && !isStructuralLine(lines[index].trim())) paragraph.push(lines[index++].trim());
-    blocks.push({ type: "paragraph", text: paragraph.join(" ") });
+    blocks.push({ type: "paragraph", text: paragraph.join(stat ? "\n" : " ") });
   }
   return blocks;
 }
@@ -707,19 +772,21 @@ function markdownImageContexts(markdown, config) {
   const followingH3 = [];
   let nextH3;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const title = lineHeadings[index];
+    const title = lineHeadings[index]?.statBlock ? null : lineHeadings[index];
     if (title?.level <= 2) nextH3 = null;
     if (title?.level === 3) nextH3 = { index, title: stripMarkup(title.title) };
     followingH3[index] = nextH3;
   }
   const hasPages = lines.includes("\\page");
+  const statRanges = findStatBlockRanges(source);
+  const lineOffsets = sourceLinesWithOffsets(source);
   let page = 1;
   let heading = "";
   let h2 = "";
   let previousH3;
   lines.forEach((line, index) => {
     if (line === "\\page") page += 1;
-    const title = lineHeadings[index];
+    const title = lineHeadings[index]?.statBlock ? null : lineHeadings[index];
     if (title) heading = stripMarkup(title.title);
     if (title?.level <= 2) {
       h2 = title.level === 2 ? heading : "";
@@ -727,7 +794,8 @@ function markdownImageContexts(markdown, config) {
     }
     if (title?.level === 3) previousH3 = { index, title: heading };
     const image = parseMarkdownImage(line);
-    if (!image || shouldIgnoreImage(image.alt, image.url, config, image.fullPage)) return;
+    const inStat = statRanges.some((range) => range.start <= lineOffsets[index]?.at && range.end > lineOffsets[index]?.at);
+    if (!image || shouldIgnoreImage(image.alt, image.url, config, image.fullPage || inStat)) return;
     const next = followingH3[index];
     const nearestH3 = next && (!previousH3 || next.index - index < index - previousH3.index) ? next : previousH3;
     const pair = JSON.stringify([image.alt, image.url]);
@@ -774,7 +842,7 @@ function refreshEditedImageSlots() {
     let heading = entry.title;
     let h3 = "";
     for (const [blockIndex, block] of entry.blocks.entries()) {
-      if (block.type === "heading") {
+      if (block.type === "heading" && !block.statBlock) {
         heading = block.text;
         if (block.level === 3) h3 = heading;
         if (block.level < 3) h3 = "";
@@ -798,8 +866,10 @@ function collectSourceArtifacts(source, blocks, config) {
   let heading = "";
   let anchor;
   let searchStart = 0;
-  for (const raw of source.split(/\r?\n/)) {
+  const statRanges = findStatBlockRanges(source);
+  for (const { line: raw, at } of sourceLinesWithOffsets(source)) {
     const line = raw.trim();
+    const inStat = statRanges.some((range) => range.start < at + raw.length && range.end > at);
     const title = parseHeadingLine(line);
     if (title) {
       heading = stripMarkup(title.title);
@@ -810,10 +880,10 @@ function collectSourceArtifacts(source, blocks, config) {
       } else anchor = undefined;
     }
     const image = parseMarkdownImage(line);
-    if (image && shouldIgnoreImage(image.alt, image.url, config, image.fullPage)) items.push({ label: image.alt || image.url, image, heading, anchor });
+    if (image && shouldIgnoreImage(image.alt, image.url, config, image.fullPage || inStat)) items.push({ label: image.alt || image.url, image, heading, anchor });
     const directiveLine = line.endsWith(IMAGE_ONLY_PAGE_MARKER) ? line.slice(0, -IMAGE_ONLY_PAGE_MARKER.length).trimEnd() : line;
     const directive = directiveLine.match(/^\{\{([\w-]+)\b(.*?)(?:\}\})?$/);
-    if (directive) items.push({ label: directive[1], text: directive[2].trim().replace(/^,\s*/, ""), heading, anchor });
+    if (directive && !inStat) items.push({ label: directive[1], text: directive[2].trim().replace(/^,\s*/, ""), heading, anchor });
   }
   return items;
 }
@@ -882,21 +952,24 @@ function parseVideoBlock(line) {
 }
 
 function applyConversionRules(source, config) {
-  const lines = source.split(/\r?\n/);
+  const ranges = findStatBlockRanges(source);
   const moved = [];
-  const kept = lines.filter((line) => {
+  const kept = sourceLinesWithOffsets(source).filter(({ line, at }) => {
+    if (ranges.some((range) => range.start < at + line.length && range.end > at)) return true;
     const image = parseMarkdownImage(line);
     if (!image) return true;
     const rule = findImageRule(image.alt, image.url, config);
     if (rule?.action === "ignore") return false;
     if (rule?.action === "move") { moved.push(line); return false; }
     return true;
-  });
+  }).map(({ line }) => line);
   if (!moved.length) return kept.join("\n");
   const location = findImageRule(extractImageAlt(moved[0]), "", config)?.location;
   if (["entry-top", "entry-top-right"].includes(location)) {
     const level = config.rules?.entryHeadingLevel || 2;
-    const headingIndex = kept.findIndex((line) => new RegExp(`^${"#".repeat(level)}\\s+`).test(line.trim()));
+    const keptSource = kept.join("\n");
+    const heading = findMarkdownHeadings(keptSource).find((item) => !item.statBlock && item.level === level);
+    const headingIndex = heading ? keptSource.slice(0, heading.index).split("\n").length - 1 : -1;
     kept.splice(headingIndex < 0 ? 0 : headingIndex + 1, 0, "", ...moved, "");
   } else kept.push("", ...moved);
   return kept.join("\n");
@@ -914,7 +987,27 @@ function findImageRule(alt, url, config = {}) {
 
 function extractImageAlt(line) { return line.match(/^!\[([^\]]*)\]/)?.[1] || ""; }
 
+function sourceLinesWithOffsets(source) {
+  let offset = 0;
+  return source.split(/\r?\n/).map((line) => {
+    const at = offset;
+    offset += line.length + (source[at + line.length] === "\r" ? 2 : 1);
+    return { line, at };
+  });
+}
+
 function cleanSource(source) {
+  const parts = [];
+  let cursor = 0;
+  for (const range of findStatBlockRanges(source)) {
+    parts.push(cleanOrdinarySource(source.slice(cursor, range.start)), source.slice(range.start, range.end));
+    cursor = range.end;
+  }
+  parts.push(cleanOrdinarySource(source.slice(cursor)));
+  return parts.filter(Boolean).join("\n\n");
+}
+
+function cleanOrdinarySource(source) {
   return unwrapHomebreweryText(source).replace(/^[ \t]*\{\{[^\n]*$/gm, "").replace(/^[ \t]*\}\}[ \t]*$/gm, "")
     .replace(/^[ \t]*\{[\w-]+\s*:[^}\n]+\}[ \t]*$/gm, "").replace(/^[ \t]*:{1,}[ \t]*$/gm, "")
     .replace(/^[ \t]*\|+[ \t]*$/gm, "").replace(/^[ \t]*\\column[ \t]*$/gm, "\n<!--COLUMN_BREAK-->\n").trim();
@@ -946,9 +1039,9 @@ function shouldIgnoreImage(alt, url, config = {}, fullPage = false) {
 }
 
 function renderPackageBlock(block, assets, entryIndex, blockIndex) {
-  if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
+  if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 && !block.statBlock ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
   if (block.type === "paragraph") {
-    const text = inlineMarkdown(block.text);
+    const text = inlineMarkdown(block.statBlock ? statBlockText(block.text) : block.text);
     if (block.style === "book-quote") return `<blockquote class="book-quote">${text}</blockquote>`;
     return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${text}</p>`;
   }
@@ -998,11 +1091,11 @@ function renderPage() {
     renderContents();
     return;
   }
-  const html = entry.blocks.map((block, blockIndex) => {
+  const html = renderStatBlocks(entry.blocks, (block, blockIndex) => {
     if (block[sourceHidden]) return "";
     const content = renderPackageBlock(block, state.bookPackage.assets, state.currentPage, blockIndex);
     return window.bookEditing?.active ? window.bookEditing.wrapBlock(block, blockIndex, content) : content;
-  }).join("\n");
+  });
   const addFirst = window.bookEditing?.active && !entry.blocks.some((block) => !block[sourceHidden])
     ? '<div class="book-block-actions"><button type="button" data-book-add="0">Add block</button></div>' : "";
   $("#pageViewport").innerHTML = `<article class="book-page"><div class="page-inner"><div class="page-content">${html}${addFirst}</div></div></article>`;
@@ -1234,7 +1327,7 @@ function validateBookPackage(bookPackage) {
     }
     entryIds.add(entry.id);
     for (const block of entry.blocks) {
-      if (!block || typeof block.type !== "string") throw new Error("An entry contains an invalid content block.");
+      if (!block || typeof block.type !== "string" || block.statBlock !== undefined && (typeof block.statBlock !== "string" || !block.statBlock.trim())) throw new Error("An entry contains an invalid content block.");
       const textValid = !["heading", "paragraph"].includes(block.type) || typeof block.text === "string";
       const headingValid = block.type !== "heading" || Number.isInteger(block.level) && block.level >= 1 && block.level <= 6;
       const listValid = block.type !== "list" || strings(block.items) && (block.ordered === undefined || typeof block.ordered === "boolean") &&
@@ -1284,6 +1377,6 @@ function normalizeBookText(bookPackage, onChange = () => {}) {
   }
   return bookPackage;
 }
-function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
+function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function escapeAttribute(value) { return escapeHtml(value); }

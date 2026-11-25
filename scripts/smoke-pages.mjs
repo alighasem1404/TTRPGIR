@@ -53,6 +53,8 @@ async function smoke(width) {
     await smokeImageOnlyPages(maker, browser, width);
     await smokePartsAndBreaks(browser, width);
     await smokeRestoreFromMarkdown(browser, width);
+    await smokeMonsterStatBlocks(browser, width);
+    await smokeStatRestore(browser, width);
     const pdfBase = new URL(await maker.evaluate(() => {
       const script = document.querySelector("script[data-pdf-engine]");
       return new URL(script.dataset.pdfEngine, script.src).href;
@@ -1380,6 +1382,241 @@ async function smokeRestoreFromMarkdown(browser, width) {
   await reader.until(() => readerState.entries[0]?.title === "Renamed B", "Reader opens restored ZIP");
   await reader.evaluate(() => goToEntry(1));
   await reader.until(() => document.querySelector(".page-art--full-page img")?.naturalWidth === 8, "Reader displays restored image");
+}
+
+async function smokeMonsterStatBlocks(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Stat block fixture Maker");
+  const source = [
+    "# Part One", "## Chapter", "Ordinary preface.",
+    "{{monster", "## Abelard “the Sévère” Alba", "---", "*Medium Humanoid (Human, Vistani), Unaligned*", ":",
+    "**AC** :: 16 (shimmering armor) {{bonus **Initiative** +0 (10)}}", "**HP** :: 104 (16d8 + 32)", "**Speed** :: 30 ft.", "",
+    "{{column-count:2", "| | | Mod | Save |", "|:---|:--:|:--:|:--:|", "| STR | 11 | +0 | +0 |", "| DEX | 11 | +0 | +1 |", "| CON | 14 | +2 | +6 |", "",
+    "| | | Mod | Save |", "|:---|:--:|:--:|:--:|", "| INT | 21 | +5 | +9 |", "| WIS | 21 | +5 | +10 |", "| CHA | 14 | +2 | +2 |", "}}", ":",
+    "**Skills** :: Arcana +9", "**CR** :: 10 (XP 5,900; PB +4)", "", "### Traits", "***Relic Wards.*** Example trait.", ":",
+    "### Actions", "***Spellcasting.*** Example spellcasting.", "**At Will:** *Mage Hand, Minor Illusion*  ", "**2/Day Each:** *Dispel Magic, Fear*  ",
+    "### Bonus Actions", "***Call Spirit.*** Example bonus action.", "### Reactions", "***Arcane Chastisement.*** Example reaction.", "}}",
+    "{{monster,frame,margin-top:-10px", "## Companion", "# Internal label", "**Profession:** Fisherman::", "### Appearance",
+    "{{columns:2", "**Body Type:** Feminine::", "**Eye Colour:** Red::", "}}", "}}", "Ordinary aftermath.",
+    "### Real section", "Normal section text.", "## Next chapter", "After the stat blocks."
+  ].join("\n");
+  await maker.upload("mdInput", "monster-stat-blocks.md", source);
+  await maker.until(() => state.entries[0]?.title === "Chapter", "Monster fixture imported");
+  const imported = await maker.evaluate(() => {
+    const sections = [...document.querySelectorAll("#pageViewport .stat-block")];
+    const inside = state.entries[0].blocks.filter((block) => block.statBlock);
+    const groups = [...new Set(inside.map((block) => block.statBlock))];
+    const first = inside.filter((block) => block.statBlock === groups[0]);
+    const original = JSON.stringify(state.bookPackage);
+    document.getElementById("openHeadings").click();
+    const bulkTitles = [...document.querySelectorAll("#headingRows input[type=text], #headingRows textarea")].map((input) => input.value);
+    document.getElementById("headingEditor").close();
+    const plan = planBookReprocessing(state.bookPackage, 2);
+    return {
+      titles: state.entries.map((entry) => entry.title), version: state.bookPackage.schemaVersion,
+      groups: groups.length, cards: sections.length, names: sections.map((section) => section.getAttribute("aria-label")),
+      tableRows: first.filter((block) => block.type === "table").map((block) => block.rows.length),
+      bonus: first.find((block) => block.type === "paragraph" && block.text.includes("Initiative"))?.text,
+      lineBreaks: sections[0].querySelectorAll("p br").length,
+      boldItalic: sections[0].querySelector("strong em")?.textContent,
+      tableLayout: getComputedStyle(sections[0].querySelector(".stat-block-tables")).display,
+      toc: [...document.querySelectorAll("#contents .page-title")].map((item) => item.textContent),
+      bulkTitles, reprocessUnchanged: !plan.changed && JSON.stringify(state.bookPackage) === original,
+      outside: state.entries[0].blocks.find((block) => block.text === "Ordinary aftermath.")?.statBlock || null
+    };
+  });
+  assert.deepEqual(imported.titles, ["Chapter", "Next chapter"]);
+  assert.equal(imported.version, 2);
+  assert.equal(imported.groups, 2);
+  assert.equal(imported.cards, 2);
+  assert.deepEqual(imported.names, ["Abelard “the Sévère” Alba", "Companion"]);
+  assert.deepEqual(imported.tableRows, [3, 3]);
+  assert.match(imported.bonus, /Initiative.*\n\*\*HP\*\*.*\n\*\*Speed\*\*/);
+  assert.ok(imported.lineBreaks >= 4);
+  assert.equal(imported.boldItalic, "Relic Wards.");
+  assert.equal(imported.tableLayout, "grid");
+  assert.deepEqual(imported.toc, ["Part One", "Chapter", "Real section", "Next chapter"]);
+  assert.ok(!imported.bulkTitles.includes("Abelard “the Sévère” Alba") && imported.bulkTitles.includes("Chapter"));
+  assert.ok(imported.reprocessUnchanged);
+  assert.equal(imported.outside, null);
+  const edited = await maker.evaluate(() => {
+    const first = state.entries[0].blocks.findIndex((block) => block.statBlock && block.type === "heading");
+    const group = state.entries[0].blocks[first].statBlock;
+    document.getElementById("toggleBookEditing").click();
+    document.querySelector(`[data-book-edit="${first}"]`).click();
+    const form = document.getElementById("bookEditingForm");
+    form.elements.text.value = "Edited Abelard";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    const next = state.entries[0].blocks.findIndex((block) => block.statBlock === group && block.text === "Edited Abelard") + 1;
+    document.querySelector(`[data-book-add="${next}"]`).click();
+    form.elements.text.value = "New stat note.";
+    form.requestSubmit(form.querySelector('button[value="save"]'));
+    const block = state.entries[0].blocks.find((block) => block.text === "New stat note.");
+    return { titles: state.entries.map((entry) => entry.title), groupKept: block?.statBlock === group,
+      book: window.bookEditing.exportPackage() };
+  });
+  assert.deepEqual(edited.titles, ["Chapter", "Next chapter"]);
+  assert.ok(edited.groupKept);
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Stat block fixture Reader");
+  await reader.upload("jsonInput", "stat-blocks.json", JSON.stringify(edited.book));
+  await reader.until(() => document.querySelector(".stat-block h2")?.textContent === "Edited Abelard", "Reader opens styled stat blocks");
+  const reopened = await reader.evaluate(() => ({
+    cards: document.querySelectorAll(".stat-block").length,
+    tables: document.querySelectorAll(".stat-block-tables table").length,
+    note: document.querySelector(".stat-block").textContent.includes("New stat note."),
+    toc: [...document.querySelectorAll("#contents .page-title")].map((item) => item.textContent)
+  }));
+  assert.deepEqual(reopened, { cards: 2, tables: 2, note: true, toc: ["Part One", "Chapter", "Real section", "Next chapter"] });
+}
+
+async function smokeStatRestore(browser, width) {
+  const maker = await browser.page("bookmaker.html", width);
+  await maker.until(() => state.bookPackage?.book.title === "Euphoria Demo", "Stat restore fixture Maker");
+  const fixture = await maker.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 8;
+    canvas.getContext("2d").fillRect(0, 0, 8, 8);
+    const art = canvas.toDataURL("image/png");
+    const source = [
+      "```metadata", "title: Legacy stat fixture", "```", "## Chapter", "Opening.",
+      "{{monster", "## First Monster", "**AC** :: 16", "**HP** :: 104", "### Traits", "***Trait.*** Original trait.", "}}",
+      "Outside after first.", "{{monster,frame", "## Second Monster", "**HP** :: 12",
+      "![Art](" + art + ")", "## Internal H2", "Final internal paragraph.", "}}",
+      "Ordinary closing.", "## Other chapter", "Other body."
+    ].join("\n");
+    const config = standardConversionConfig();
+    const book = JSON.parse(JSON.stringify(buildBookPackage(source, "legacy-stat.md", parseDocument(source, config), config)));
+    const heading = (text, level = 2) => ({ type: "heading", text, level });
+    const paragraph = (text) => ({ type: "paragraph", text });
+    book.schemaVersion = 1;
+    book.entries = [
+      { id: "chapter-1", title: "Chapter", order: 0, blocks: [heading("Chapter"), paragraph("Opening.")] },
+      { id: "first-monster-2", title: "Edited First Monster", order: 1, blocks: [
+        heading("Edited First Monster"), paragraph("**AC** :: 18 **HP** :: 99"), heading("Traits", 3),
+        paragraph("***Trait.*** My edited trait."), paragraph("Outside after first.")
+      ] },
+      { id: "second-monster-3", title: "Second Monster", order: 2, blocks: [
+        heading("Second Monster"), paragraph("**HP** :: 12"), { type: "image", assetId: "art", role: "illustration", placement: "inline", caption: "Edited art caption" }
+      ] },
+      { id: "internal-h2-4", title: "Internal H2", order: 3, blocks: [
+        heading("Internal H2"), paragraph("My edited final paragraph."), paragraph("Ordinary closing.")
+      ] },
+      { id: "other-chapter-5", title: "Other chapter", order: 4, blocks: [heading("Other chapter"), paragraph("Other body.")] }
+    ];
+    book.assets = [{ id: "art", src: art, alt: "Art", role: "illustration" }];
+    book.theme.tokens["color.primary"] = "#34663a";
+    const moved = { ...book, entries: [book.entries[0], book.entries[2], book.entries[3], book.entries[1], book.entries[4]] };
+    const uncertain = scanRestoreStatBlocks(moved, source, "legacy-stat.md", config);
+    const separated = { ...book, entries: [book.entries[0], book.entries[2], book.entries[1], book.entries[3], book.entries[4]] };
+    const broken = scanRestoreStatBlocks(separated, source, "legacy-stat.md", config).candidates.find((candidate) => candidate.name === "Second Monster");
+    const zipBook = JSON.parse(JSON.stringify(book));
+    zipBook.assets[0].src = "images/stat-art.png";
+    const png = await (await fetch(art)).arrayBuffer();
+    const zip = new JSZip();
+    zip.file("book.json", JSON.stringify(zipBook));
+    zip.file("images/stat-art.png", png);
+    return { source, book, png: [...new Uint8Array(png)], zip: [...await zip.generateAsync({ type: "uint8array" })],
+      reorderedMerges: uncertain.candidates.map((candidate) => candidate.mergeRecommended), brokenConfidence: broken.confidence };
+  });
+  assert.deepEqual(fixture.reorderedMerges, [false, false], "Reordered legacy entry merges require manual review");
+  assert.equal(fixture.brokenConfidence, false, "A separated multi-entry stat group requires manual range review");
+  await maker.upload("jsonInput", "legacy-stat.json", JSON.stringify(fixture.book));
+  await maker.until(() => state.entries.length === 5 && state.bookPackage?.book.title === "Legacy stat fixture", "Legacy stat book opened");
+  const before = await maker.evaluate(() => JSON.stringify(state.bookPackage));
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "legacy-stat.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "Stat grouping review ready");
+  const preview = await maker.evaluate(() => {
+    const rows = restoreDraft.statRows.map((row) => ({
+      name: row.candidate.name, start: Number(row.startSelect.value), end: Number(row.endSelect.value),
+      entry: Number(row.entrySelect.value), endEntry: Number(row.endEntrySelect.value), merge: row.merge.checked,
+      confidence: row.candidate.confidence
+    }));
+    const mode = document.getElementById("restoreKind").value;
+    const disabled = document.getElementById("applyStatRestore").disabled;
+    document.getElementById("restoreStatSelectSuggested").click();
+    const selection = document.getElementById("restoreStatSelection").textContent;
+    document.getElementById("bookRestore").close();
+    return { mode, disabled, rows, selection, unchanged: JSON.stringify(state.bookPackage) };
+  });
+  assert.equal(preview.mode, "stats");
+  assert.ok(preview.disabled);
+  assert.deepEqual(preview.rows, [
+    { name: "First Monster", start: 0, end: 4, entry: 1, endEntry: 1, merge: true, confidence: true },
+    { name: "Second Monster", start: 0, end: 2, entry: 2, endEntry: 3, merge: true, confidence: true }
+  ]);
+  assert.match(preview.selection, /5.*2/);
+  assert.equal(preview.unchanged, before, "Preview and cancel are non-destructive");
+
+  // Grouping an old monster entry without merging it remains an explicit option.
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "legacy-stat.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "Selective stat restore ready");
+  const groupedOnly = await maker.evaluate(() => {
+    const row = restoreDraft.statRows[0];
+    row.merge.click();
+    row.checkbox.click();
+    document.getElementById("applyStatRestore").click();
+    return { entries: state.entries.length, stat: Boolean(state.entries[1].blocks[0].statBlock), outside: Boolean(state.entries[1].blocks[4].statBlock),
+      other: Boolean(state.entries[2].blocks[0].statBlock) };
+  });
+  assert.deepEqual(groupedOnly, { entries: 5, stat: true, outside: false, other: false });
+
+  // Repeat with the untouched original ZIP, including a bundled image in a card.
+  await maker.upload("jsonInput", "legacy-stat.zip", fixture.zip);
+  await maker.until(() => state.entries.length === 5 && state.bundledImages.has("images/stat-art.png"), "Legacy stat ZIP opened");
+  await maker.evaluate(() => { goToPage(3); document.getElementById("restoreFromMarkdown").click(); });
+  await maker.upload("restoreMarkdownInput", "legacy-stat.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "ZIP stat restore review ready");
+  const applied = await maker.evaluate(() => {
+    const legacy = state.bookPackage;
+    const oldBlocks = JSON.stringify(legacy.entries.flatMap((entry) => entry.blocks));
+    const bundle = state.bundledImages.get("images/stat-art.png");
+    document.getElementById("restoreKind").value = "stats";
+    document.getElementById("restoreKind").dispatchEvent(new Event("change"));
+    document.getElementById("restoreStatSelectSuggested").click();
+    document.getElementById("applyStatRestore").click();
+    const after = JSON.stringify(state.entries.flatMap((entry) => entry.blocks.map(({ statBlock, ...block }) => block)));
+    const outside = state.entries[0].blocks.filter((block) => ["Outside after first.", "Ordinary closing."].includes(block.text)).every((block) => !block.statBlock);
+    return {
+      noContentChange: oldBlocks === after, metadata: legacy.book === state.bookPackage.book && legacy.theme === state.bookPackage.theme && legacy.assets === state.bookPackage.assets && legacy.source === state.bookPackage.source,
+      titles: state.entries.map((entry) => entry.title), version: state.bookPackage.schemaVersion,
+      selected: state.entries[state.currentPage]?.id, grouped: [...new Set(state.entries[0].blocks.map((block) => block.statBlock).filter(Boolean))].length,
+      outside, bundled: state.bundledImages.get("images/stat-art.png") === bundle,
+      cards: document.querySelectorAll(".stat-block").length, rows: document.querySelector(".stat-block p")?.querySelectorAll("br").length,
+      toc: [...document.querySelectorAll("#contents .page-title")].map((item) => item.textContent)
+    };
+  });
+  assert.ok(applied.noContentChange && applied.metadata && applied.outside && applied.bundled);
+  assert.deepEqual(applied.titles, ["Chapter", "Other chapter"]);
+  assert.equal(applied.version, 2);
+  assert.equal(applied.selected, "chapter-1");
+  assert.equal(applied.grouped, 2);
+  assert.equal(applied.cards, 2);
+  assert.equal(applied.rows, 1, "Legacy stat rows display line breaks without rewriting the saved text");
+  assert.deepEqual(applied.toc, ["Chapter", "Other chapter"]);
+
+  await maker.evaluate(() => document.getElementById("restoreFromMarkdown").click());
+  await maker.upload("restoreMarkdownInput", "legacy-stat.md", fixture.source);
+  await maker.until(() => !document.getElementById("restoreReview").hidden, "Stat restore rescan ready");
+  assert.equal(await maker.evaluate(() => restoreDraft.statRows.length), 0, "Recovered groups are not offered again");
+  await maker.evaluate(() => { document.getElementById("bookRestore").close(); document.getElementById("exportButton").click(); });
+  await maker.until(() => !document.getElementById("downloadBookZip").disabled, "Recovered stat ZIP ready");
+  const exported = await maker.evaluate(async () => {
+    const { bookPackage, images } = await window.bookArchive.open(zipExport.blob, validateBookPackage, new AbortController().signal);
+    const png = [...new Uint8Array(await images.get("images/stat-art.png").arrayBuffer())];
+    const bytes = [...new Uint8Array(await zipExport.blob.arrayBuffer())];
+    document.getElementById("bookZipExport").close();
+    return { png, bytes, version: bookPackage.schemaVersion };
+  });
+  assert.deepEqual(exported.png, fixture.png);
+  assert.equal(exported.version, 2);
+  const reader = await browser.page("index.html", width);
+  await reader.until(() => readerState.bookPackage?.book.title === "Euphoria Demo", "Reader stat recovery test ready");
+  await reader.upload("jsonInput", "recovered-stat.zip", exported.bytes);
+  await reader.until(() => document.querySelector(".stat-block h2")?.textContent === "Edited First Monster", "Reader opens recovered stat groups");
+  assert.equal(await reader.evaluate(() => document.querySelectorAll(".stat-block").length), 2);
 }
 
 async function smokeHeadingGroupOrdering(browser, width) {

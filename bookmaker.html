@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Book Maker · Euphoria Content Lab</title>
     <meta name="description" content="Private Markdown to JSON book preparation tool." />
-    <link rel="stylesheet" href="styles.css?v=27" />
+    <link rel="stylesheet" href="styles.css?v=29" />
   </head>
   <body>
     <div class="app-shell maker-page">
@@ -136,15 +136,17 @@
           <h2 id="restoreTitle">Restore from Markdown</h2>
           <form method="dialog"><button type="submit">Close</button></form>
         </div>
-        <p>Compare the original Markdown with your open book. Select missing images to add; existing content and image replacements will not be changed.</p>
+        <p>Compare the original Markdown with your open book. Restore missing images or recover monster stat-block grouping. Your existing text, tables and image replacements will not be replaced. Apply each restore type separately.</p>
         <div class="restore-source">
           <label>Original Markdown <input id="restoreMarkdownInput" type="file" accept=".md,.markdown,.txt,text/plain,text/markdown"></label>
           <button id="restoreUseSource" type="button" hidden>Use current Markdown</button>
         </div>
         <p id="restoreStatus" class="heading-hint" role="status"></p>
         <section id="restoreReview" hidden>
-          <p id="restoreSummary"></p>
           <p id="restoreSourceWarning" class="heading-hint"></p>
+          <label class="restore-kind">Restore type <select id="restoreKind"><option value="images">Missing images</option><option value="stats">Stat blocks</option></select></label>
+          <section id="restoreImageReview">
+          <p id="restoreSummary"></p>
           <div class="restore-toolbar">
             <button id="restoreSelectSuggested" type="button">Select suggested</button>
             <button id="restoreClearSelection" type="button">Clear selection</button>
@@ -155,6 +157,20 @@
           <div class="heading-dialog-actions">
             <button id="applyRestore" type="button" disabled>Restore selected images</button>
           </div>
+          </section>
+          <section id="restoreStatReview" hidden>
+            <p id="restoreStatSummary"></p>
+            <div class="restore-toolbar">
+              <button id="restoreStatSelectSuggested" type="button">Select suggested</button>
+              <button id="restoreStatClearSelection" type="button">Clear selection</button>
+              <span id="restoreStatSelection" aria-live="polite"></span>
+            </div>
+            <p class="heading-hint">Recover the original monster wrapper by grouping existing blocks. Review the first and last included block. Optional legacy entry merges keep all content in its current order, but remove the old monster entry from navigation.</p>
+            <ul id="restoreStatRows" class="restore-rows"></ul>
+            <div class="heading-dialog-actions">
+              <button id="applyStatRestore" type="button" disabled>Recover selected stat blocks</button>
+            </div>
+          </section>
         </section>
       </dialog>
       <dialog id="bookReprocess" aria-labelledby="reprocessTitle">
@@ -327,11 +343,12 @@
     <script src="image-viewer.js?v=2"></script>
     <script src="vendor/jszip-3.10.1/jszip.min.js"></script>
     <script src="book-archive.js?v=4"></script>
-    <script src="book-contents.js?v=1"></script>
-    <script src="app.js?v=30"></script>
-    <script src="book-restore.js?v=1"></script>
-    <script src="book-reprocessing.js?v=1"></script>
-    <script src="book-editing.js?v=12"></script>
+    <script src="book-contents.js?v=3"></script>
+    <script src="app.js?v=33"></script>
+    <script src="book-restore.js?v=3"></script>
+    <script src="book-stat-restore.js?v=1"></script>
+    <script src="book-reprocessing.js?v=2"></script>
+    <script src="book-editing.js?v=13"></script>
     <script src="pdf-import.js?v=7" data-pdf-engine="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/"></script>
     <script src="image-recovery.js?v=7"></script>
   </body>

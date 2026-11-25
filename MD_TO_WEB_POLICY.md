@@ -15,6 +15,7 @@ The Markdown remains the source of truth. The web reader presents the content se
 - `#####` headings become notes, labels, or small callouts.
 - Content continues across `\page` markers. `\page` is retained only as source metadata and must not split a web entry.
 - Homebrewery wrapper blocks such as `{{wide}}`, `{{clubName}}`, `{{fancyTable}}`, and `::::` are treated as layout hints. Their content is preserved, but the wrapper itself is not rendered as a separate page.
+- A balanced `{{monster ... }}` wrapper is semantic content: the whole block, including nested columns, bonuses, headings, text, images and tables, is kept together in a styled stat panel. Its headings never create book entries, part labels, or section links. Stat rows and hard line breaks are preserved.
 
 ## Images
 

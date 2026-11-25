@@ -102,37 +102,37 @@
     "heading": {
       "type": "object",
       "required": ["type", "level", "text"],
-      "properties": { "type": { "const": "heading" }, "level": { "type": "integer", "minimum": 1, "maximum": 6 }, "text": { "type": "string" } },
+      "properties": { "type": { "const": "heading" }, "statBlock": { "type": "string", "minLength": 1 }, "level": { "type": "integer", "minimum": 1, "maximum": 6 }, "text": { "type": "string" } },
       "additionalProperties": false
     },
     "paragraph": {
       "type": "object",
       "required": ["type", "text"],
-      "properties": { "type": { "const": "paragraph" }, "text": { "type": "string" }, "style": { "type": "string" } },
+      "properties": { "type": { "const": "paragraph" }, "statBlock": { "type": "string", "minLength": 1 }, "text": { "type": "string" }, "style": { "type": "string" } },
       "additionalProperties": false
     },
     "image": {
       "type": "object",
       "required": ["type", "assetId", "role", "placement"],
-      "properties": { "type": { "const": "image" }, "assetId": { "type": "string" }, "role": { "type": "string" }, "placement": { "enum": ["inline", "entry-top", "entry-top-right", "section-top", "asset-only"] }, "className": { "type": "string" }, "width": { "type": "string" }, "alt": { "type": "string" }, "caption": { "type": "string" } },
+      "properties": { "type": { "const": "image" }, "statBlock": { "type": "string", "minLength": 1 }, "assetId": { "type": "string" }, "role": { "type": "string" }, "placement": { "enum": ["inline", "entry-top", "entry-top-right", "section-top", "asset-only"] }, "className": { "type": "string" }, "width": { "type": "string" }, "alt": { "type": "string" }, "caption": { "type": "string" } },
       "additionalProperties": false
     },
     "list": {
       "type": "object",
       "required": ["type", "items"],
-      "properties": { "type": { "const": "list" }, "items": { "type": "array", "items": { "type": "string" } }, "ordered": { "type": "boolean" }, "start": { "type": "integer", "minimum": 0 } },
+      "properties": { "type": { "const": "list" }, "statBlock": { "type": "string", "minLength": 1 }, "items": { "type": "array", "items": { "type": "string" } }, "ordered": { "type": "boolean" }, "start": { "type": "integer", "minimum": 0 } },
       "additionalProperties": false
     },
     "table": {
       "type": "object",
       "required": ["type", "columns", "rows"],
-      "properties": { "type": { "const": "table" }, "columns": { "type": "array", "items": { "type": "string" } }, "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } } },
+      "properties": { "type": { "const": "table" }, "statBlock": { "type": "string", "minLength": 1 }, "columns": { "type": "array", "items": { "type": "string" } }, "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } } },
       "additionalProperties": false
     },
     "divider": {
       "type": "object",
       "required": ["type"],
-      "properties": { "type": { "const": "divider" }, "style": { "type": "string" } },
+      "properties": { "type": { "const": "divider" }, "statBlock": { "type": "string", "minLength": 1 }, "style": { "type": "string" } },
       "additionalProperties": false
     },
     "embed": {
@@ -140,6 +140,7 @@
       "required": ["type", "kind"],
       "properties": {
         "type": { "const": "embed" },
+        "statBlock": { "type": "string", "minLength": 1 },
         "kind": { "type": "string" },
         "title": { "type": "string" },
         "items": { "type": "array", "items": { "type": "object", "additionalProperties": { "type": "string" } } }

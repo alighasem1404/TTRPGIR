@@ -14,7 +14,7 @@ The local tools are intentionally separated:
 
 Book Maker exports a ZIP once a replacement image has been applied. The archive contains `book.json` at the top level and the recovered WebP files in `images/`. Each recovered asset points to its file with an archive-relative path such as `images/moonlit-market.webp`. Original asset URLs still apply to figures without replacements.
 
-Open the ZIP directly in the Reader to use its bundled images offline. The Reader also accepts older ZIPs with bundled PNG images. Any original image URLs that point to the web still need a network connection. You can extract the ZIP to reuse the image files separately. The archive uses the existing Book JSON v1 schema.
+Open the ZIP directly in the Reader to use its bundled images offline. The Reader also accepts older ZIPs with bundled PNG images. Any original image URLs that point to the web still need a network connection. You can extract the ZIP to reuse the image files separately. The archive supports Book JSON v1 and v2.
 
 ## Responsibilities
 
@@ -33,7 +33,7 @@ Open the ZIP directly in the Reader to use its bundled images offline. The Reade
 These rules apply to every book unless a future format version changes them:
 
 1. The configured heading level, normally H2, creates an entry.
-2. H1 headings are non-clickable part labels in the contents list. They remain heading blocks and introduce the following H2 entries without creating extra entries. H3–H6 remain blocks inside the entry.
+2. H1 headings are non-clickable part labels in the contents list. They remain heading blocks and introduce the following H2 entries without creating extra entries. H3–H6 remain blocks inside the entry. Headings within a monster stat block never create entries or contents links.
 3. `\page` does not create a web entry. It may be preserved as source metadata.
 4. Images are inline by default and appear in source order.
 5. Homebrewery absolute positioning is ignored.
@@ -42,6 +42,19 @@ These rules apply to every book unless a future format version changes them:
 8. A semantic image placement such as `entry-top-right` may be defined by a builder profile when a book needs an emblem or similar feature art beside an entry heading.
 
 9. Explicit HTML line breaks (`<br>`, `<br/>`, `<br />`) become newline characters (`\n`) in text fields. Both the Maker and Reader display these as line breaks.
+
+## Monster stat blocks
+
+A balanced Homebrewery `{{monster ... }}` wrapper defines one stat block, including nested directives, tables, images, and headings. The outer wrapper is detected before splitting the source into H2 entries. Each contained content block is stored normally with an additional `statBlock` string identifying its group. For example:
+
+```json
+[
+  { "type": "heading", "level": 2, "text": "Creature name", "statBlock": "chapter-1-stat-1" },
+  { "type": "paragraph", "text": "**AC**: 16\n**HP**: 104", "statBlock": "chapter-1-stat-1" }
+]
+```
+
+The Maker and Reader render consecutive blocks sharing that ID in one styled panel. Monster headings do not become book navigation items, and nested ability-score tables can display together. Block membership is retained during preview edits and ZIP/JSON export. The original Markdown is needed to identify wrappers omitted from older v1 exports; use **Restore from Markdown → Stat blocks** to recover the grouping without replacing edited content.
 
 ## Manual reprocessing
 
@@ -57,9 +70,13 @@ Only data still present in the package can be reprocessed. Content discarded by 
 
 Applying the selection inserts only new image blocks at the chosen boundaries. Existing block objects, entry metadata/order, theme, source metadata, and assets remain intact. An existing matching asset is reused when possible; otherwise a unique asset ID is allocated. The reference Markdown is not embedded in the exported package, and no schema change is required. This recovers image references, not unavailable image bytes; bundled and recovered images already in the book are preserved.
 
+## Recovering stat-block grouping from older exports
+
+The **Stat blocks** restore mode detects the original monster wrappers, matches legacy entry IDs and nearby block boundaries, and proposes ranges of existing blocks to assign a statBlock ID. It does not copy the original stat values over edited ones. Ambiguous boundaries require manual review. If a wrapper spans legacy entries, its internal entry boundaries are merged so the card remains contiguous. A separately listed legacy monster entry can optionally be folded into its predecessor; the preview identifies these merges and their entry count impact. Every existing block remains in its original order, with surviving entry metadata and assets preserved. Legacy double-colon stat rows are displayed with line breaks without rewriting stored text. The resulting package uses schema version 2.
+
 ## Versioning rules
 
-- Increase `schemaVersion` when the package shape changes. The current package format is version 1.
+- Increase `schemaVersion` when the package shape changes. Version 2 supports the optional statBlock group identifier; packages that do not use grouping can remain version 1. Both versions are readable.
 - Keep old readers able to reject unsupported major versions cleanly.
 - Use stable IDs for books, entries, blocks, and assets.
 - Store the source filename and later a source hash so an exported package can be traced back to its Markdown.

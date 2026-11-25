@@ -30,7 +30,7 @@ function indexRestoreBook(book, level) {
   const urls = new Map();
   for (const [entryIndex, entry] of book.entries.entries()) {
     ids.set(entry.id, entryIndex);
-    const names = new Set([entry.title, ...entry.blocks.filter((block) => block.type === "heading" && block.level === level).map((block) => block.text)].map(restoreTextKey));
+    const names = new Set([entry.title, ...entry.blocks.filter((block) => !block.statBlock && block.type === "heading" && block.level === level).map((block) => block.text)].map(restoreTextKey));
     for (const name of names) {
       if (!name) continue;
       if (!titles.has(name)) titles.set(name, []);
@@ -202,7 +202,7 @@ function scanRestoreImages(book, markdown, fileName, config = {}) {
     });
     if (possible) candidate.possible = "An existing image may be a replacement or bundled version of this artwork. Review before restoring.";
   }
-  return { candidates, sourceCount: sourceImages.length, presentCount: matched.size, sourceTitle: reference.book.title };
+  return { candidates, sourceCount: sourceImages.length, presentCount: matched.size, sourceTitle: reference.book.title, reference };
 }
 
 function restoreBlockLabel(block, book) {
@@ -234,6 +234,9 @@ function resetBookRestore() {
   $("#restoreMarkdownInput").value = "";
   $("#restoreReview").hidden = true;
   $("#restoreRows").replaceChildren();
+  $("#restoreStatRows").replaceChildren();
+  $("#restoreKind").value = "images";
+  $("#applyStatRestore").disabled = true;
   $("#restoreStatus").textContent = "";
   $("#restoreSourceWarning").textContent = "";
   $("#applyRestore").disabled = true;
@@ -243,7 +246,7 @@ function openBookRestore() {
   if (!state.bookPackage) return;
   resetBookRestore();
   $("#restoreUseSource").hidden = !state.source;
-  $("#restoreStatus").textContent = "Choose the original Markdown file to scan for missing images.";
+  $("#restoreStatus").textContent = "Choose the original Markdown file to scan for missing images and stat blocks.";
   $("#bookRestore").showModal();
 }
 
@@ -276,7 +279,8 @@ function reviewRestoreSource(markdown, fileName) {
   try {
     const book = state.bookPackage;
     const result = scanRestoreImages(book, markdown, fileName, state.config);
-    restoreDraft = { book, entries: state.entries, assets: book.assets, recoveries: new Map(state.recoveredImages), result, rows: [] };
+    const statResult = scanRestoreStatBlocks(book, markdown, fileName, state.config, result.reference);
+    restoreDraft = { book, entries: state.entries, assets: book.assets, recoveries: new Map(state.recoveredImages), result, statResult, rows: [], statRows: [] };
     const expectedName = book.source?.fileName?.split(/[\\/]/).pop();
     const sameTitle = restoreTextKey(book.book.title) === restoreTextKey(result.sourceTitle);
     $("#restoreStatus").textContent = `Scanned ${fileName}. Your open book has not been changed.`;
@@ -290,11 +294,22 @@ function reviewRestoreSource(markdown, fileName) {
       empty.textContent = "No missing image occurrences found.";
       $("#restoreRows").append(empty);
     }
+    renderStatRestoreReview(statResult, book);
+    $("#restoreKind").options[0].textContent = `Missing images (${result.candidates.length})`;
+    $("#restoreKind").options[1].textContent = `Stat blocks (${statResult.candidates.length})`;
+    $("#restoreKind").value = !result.candidates.length && statResult.candidates.length ? "stats" : "images";
+    showRestoreKind();
     $("#restoreReview").hidden = false;
     updateRestoreSelection();
   } catch (error) {
     $("#restoreStatus").textContent = `Could not scan the reference Markdown. ${error.message}`;
   }
+}
+
+function showRestoreKind() {
+  const stats = $("#restoreKind").value === "stats";
+  $("#restoreImageReview").hidden = stats;
+  $("#restoreStatReview").hidden = !stats;
 }
 
 function makeRestoreRow(candidate, book) {
@@ -389,6 +404,10 @@ function buildRestoredBook(book, selections) {
       byUrl.set(candidate.urlKey, added);
     }
     const block = { ...candidate.block, assetId };
+    const beforeGroup = entry.blocks[position - 1]?.statBlock;
+    const afterGroup = entry.blocks[position]?.statBlock;
+    if (beforeGroup && beforeGroup === afterGroup) block.statBlock = beforeGroup;
+    else if (!block.statBlock || block.statBlock !== beforeGroup && block.statBlock !== afterGroup) delete block.statBlock;
     if (existing && existing.alt !== candidate.asset.alt) {
       block.alt = candidate.asset.alt;
       block.caption = candidate.asset.alt;
@@ -412,14 +431,18 @@ function buildRestoredBook(book, selections) {
   return { ...book, entries, assets: [...assets.values()] };
 }
 
+function restoreDraftChanged(draft) {
+  const recoveriesChanged = draft.recoveries.size !== state.recoveredImages.size ||
+    [...draft.recoveries].some(([key, recovery]) => state.recoveredImages.get(key) !== recovery);
+  return draft.book !== state.bookPackage || draft.entries !== state.entries || draft.assets !== state.bookPackage.assets || recoveriesChanged;
+}
+
 function applyBookRestore() {
   const draft = restoreDraft;
   if (!draft) return;
   const selected = draft.rows.filter((row) => row.checkbox.checked);
   if (!selected.length || selected.some((row) => !restoreRowReady(row))) return;
-  const recoveriesChanged = draft.recoveries.size !== state.recoveredImages.size ||
-    [...draft.recoveries].some(([key, recovery]) => state.recoveredImages.get(key) !== recovery);
-  if (draft.book !== state.bookPackage || draft.entries !== state.entries || draft.assets !== state.bookPackage.assets || recoveriesChanged) {
+  if (restoreDraftChanged(draft)) {
     $("#restoreStatus").textContent = "The book changed during review. Scan the original Markdown again.";
     $("#restoreReview").hidden = true;
     restoreDraft = null;

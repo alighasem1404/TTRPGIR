@@ -73,7 +73,7 @@ function renderEntry() {
     renderContents();
     return;
   }
-  const html = entry.blocks.map((block, blockIndex) => renderBlock(block, readerState.bookPackage.assets, readerState.currentEntry, blockIndex)).join("\n");
+  const html = renderStatBlocks(entry.blocks, (block, blockIndex) => renderBlock(block, readerState.bookPackage.assets, readerState.currentEntry, blockIndex));
   const direction = readerState.bookPackage.book.direction === "rtl" ? "rtl" : "ltr";
   $("#pageViewport").innerHTML = `<article class="book-page" dir="${direction}"><div class="page-inner"><div class="page-content">${html}</div></div></article>`;
   $("#currentPage").textContent = readerState.currentEntry + 1;
@@ -96,9 +96,9 @@ function goToEntry(index) {
 }
 
 function renderBlock(block, assets, entryIndex, blockIndex) {
-  if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
+  if (block.type === "heading") { const level = Math.min(Math.max(Math.trunc(block.level) || 2, 1), 6); const id = level === 3 && !block.statBlock ? ` id="entry-${entryIndex}-section-${blockIndex}"` : ""; return `<h${level}${id}>${inlineMarkdown(block.text)}</h${level}>`; }
   if (block.type === "paragraph") {
-    const text = inlineMarkdown(block.text);
+    const text = inlineMarkdown(block.statBlock ? statBlockText(block.text) : block.text);
     if (block.style === "book-quote") return `<blockquote class="book-quote">${text}</blockquote>`;
     return `<p${block.style ? ` class="${escapeAttribute(block.style)}"` : ""}>${text}</p>`;
   }
@@ -174,7 +174,7 @@ function validateBookPackage(bookPackage) {
 }
 
 function isReadableBlock(block) {
-  if (!block || typeof block.type !== "string") return false;
+  if (!block || typeof block.type !== "string" || block.statBlock !== undefined && (typeof block.statBlock !== "string" || !block.statBlock.trim())) return false;
   if (block.type === "image") return [block.className, block.alt, block.caption].every((value) => value === undefined || typeof value === "string");
   if (block.type === "list") return Array.isArray(block.items);
   if (block.type === "table") return Array.isArray(block.columns) && Array.isArray(block.rows) && block.rows.every(Array.isArray);
@@ -183,7 +183,7 @@ function isReadableBlock(block) {
 }
 
 function normalizeBreaks(value) { return String(value).replace(/[ \t]*<br[ \t]*\/?[ \t]*>[ \t]*/gi, "\n").replace(/\r\n?/g, "\n"); }
-function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
+function inlineMarkdown(value) { let html = escapeHtml(normalizeBreaks(value)).replace(/`([^`]+)`/g, "<code>$1</code>"); html = html.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>"); return html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1 ↗</a>').replace(/\n/g, "<br>"); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function escapeAttribute(value) { return escapeHtml(value); }
 function setStatus(message) { $("#sourceStatus").innerHTML = `<i></i> ${escapeHtml(message)}`; }
